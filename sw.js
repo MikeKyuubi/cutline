@@ -1,5 +1,5 @@
 // Offline support: the app shell is network-first (so updates arrive), libraries and fonts are cache-first.
-const CACHE = 'cut69-v2';
+const CACHE = 'cutline-v3';
 const SHELL = ['./', 'index.html', 'app.js', 'config.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/apple-touch-icon.png'];
 const LIB_HOSTS = ['cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 

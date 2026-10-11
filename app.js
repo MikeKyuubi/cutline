@@ -490,7 +490,7 @@ function renderTrain(){
 function activityCard(date){
   const h = health[date];
   if (!healthToken) return `<div class="card"><div class="spread"><h3>Activity</h3><button class="btn" data-goto="setup">Connect Apple Health</button></div><div class="small muted">Pull steps, distance, active calories and weight from your iPhone automatically.</div></div>`;
-  if (!h) return `<div class="card"><h3>Activity</h3><div class="small muted">No Apple Health data yet today. It arrives when the Cut69 Health shortcut runs (automatically at the times you set, or tap it on your iPhone).</div></div>`;
+  if (!h) return `<div class="card"><h3>Activity</h3><div class="small muted">No Apple Health data yet today. It arrives when the Cutline Health shortcut runs (automatically at the times you set, or tap it on your iPhone).</div></div>`;
   const steps = Number(h.steps || 0);
   const at = h.updated_at ? new Date(h.updated_at) : null;
   return `<div class="card">
@@ -653,7 +653,7 @@ function renderSetup(){
   </div>
   ${uid ? `<div class="card">
     <h3>Apple Health (iPhone)</h3>
-    ${healthToken ? `<div class="small">Build the <b>Cut69 Health</b> shortcut on your iPhone using these three values (tap to copy), then follow the steps below.</div>
+    ${healthToken ? `<div class="small">Build the <b>Cutline Health</b> shortcut on your iPhone using these three values (tap to copy), then follow the steps below.</div>
       <div class="fields">
         <div class="field"><span class="label">1 · URL</span><button class="btn" data-copy="${esc(cfg().url + '/rest/v1/rpc/ingest_health')}">Copy URL</button></div>
         <div class="field"><span class="label">2 · apikey header</span><button class="btn" data-copy="${esc(cfg().key)}">Copy key</button></div>
@@ -661,14 +661,14 @@ function renderSetup(){
       </div>
       <details><summary class="small" style="cursor:pointer"><b>How to build the shortcut</b></summary>
       <ol class="small" style="display:grid;gap:6px;padding-left:20px">
-        <li>Open <b>Shortcuts</b> → <b>+</b>. Name it <b>Cut69 Health</b>.</li>
+        <li>Open <b>Shortcuts</b> → <b>+</b>. Name it <b>Cutline Health</b>.</li>
         <li>Add <b>Find Health Samples</b>: type <b>Steps</b>, Start Date <b>is today</b>. Then <b>Calculate Statistics</b> → <b>Sum</b>.</li>
         <li>Repeat for <b>Walking + Running Distance</b> (Sum) and <b>Active Energy</b> (Sum).</li>
         <li>Add <b>Find Health Samples</b>: type <b>Weight</b>, Start Date <b>is today</b>, Sort by <b>Start Date</b>, Order <b>Latest First</b>, Limit <b>1</b>.</li>
         <li>Add <b>Format Date</b>: Current Date, Date Format <b>Custom</b>, <code>yyyy-MM-dd</code>.</li>
         <li>Add <b>Get Contents of URL</b>: paste the URL. Method <b>POST</b>. Headers: <code>apikey</code> = the key, <code>Content-Type</code> = <code>application/json</code>. Request Body <b>JSON</b>, all fields type <b>Text</b>: <code>p_token</code> = your link code, <code>p_date</code> = Formatted Date, <code>p_steps</code> = the steps Sum, <code>p_distance_km</code> = the distance Sum, <code>p_active_kcal</code> = the energy Sum, <code>p_weight_kg</code> = the weight sample.</li>
         <li>Run it once and tap <b>Allow</b> for Health access. Today's steps should appear in this app within seconds.</li>
-        <li>Make it automatic: <b>Automation</b> → <b>+</b> → <b>Time of Day</b> (e.g. 12:00, daily) → <b>Run Immediately</b> → action <b>Run Shortcut: Cut69 Health</b>. Add more for 18:00 and 21:30.</li>
+        <li>Make it automatic: <b>Automation</b> → <b>+</b> → <b>Time of Day</b> (e.g. 12:00, daily) → <b>Run Immediately</b> → action <b>Run Shortcut: Cutline Health</b>. Add more for 18:00 and 21:30.</li>
       </ol>
       <div class="small muted">If it fails with a 401 error, add a second header <code>Authorization</code> = <code>Bearer </code> followed by the same key.</div></details>
       <div class="row"><button class="btn ghost" data-act="health-token">Make a new link code</button><span class="small muted">The old code stops working.</span></div>`
