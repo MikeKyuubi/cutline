@@ -124,7 +124,7 @@ const WORKOUTS = {A:['goblet','floorpress','row','revlunge','plank'], B:['rdl','
 const LIFT_DAYS = [1,3,5]; // Mon Wed Fri
 
 /* ---------- state ---------- */
-const DEFAULT_PROFILE = {age:30, sex:'m', heightCm:176, startKg:74, goalKg:69, startDate:today(),
+const DEFAULT_PROFILE = {age:30, sex:'m', heightCm:167, startKg:74, goalKg:69, startDate:today(),
   activity:1.3, vestKg:10, coffeeType:'gold', region:'ph', location:'', adjust:0, penalties:true,
   waterRemind:false, remindEvery:60, wakeHour:7, sleepHour:22};
 let profile = clone(DEFAULT_PROFILE);
