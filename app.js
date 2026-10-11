@@ -361,7 +361,9 @@ function coachLine(v, d){
   if (left < -50) return ['bad', `Over by ${-left} kcal. Kitchen is closed for today.${profile.penalties ? ' Tomorrow\'s ruck gets +15 min.' : ''}`];
   const avg = avgWeight(today()), dayN = diffDays(profile.startDate, today());
   if (dayN >= 10 && avg && avg - planWeight(today()) > 0.6) return ['bad', `7-day average ${avg.toFixed(1)} kg is ${(avg - planWeight(today())).toFixed(1)} kg behind plan. Tighten up: cut 150 kcal (Setup) and stop guessing portions.`];
-  if (v.rp.min > (d.ruckMin||0) && h >= 18) return ['bad', `Ruck still owed: ${v.rp.min - (d.ruckMin||0)} min. Put the vest on and go now.`];
+  if (v.rp.min > (d.ruckMin||0) && h >= 18) return ['bad', v.rp.vest
+    ? `Ruck still owed: ${v.rp.min - (d.ruckMin||0)} min. Put the vest on and go now.`
+    : `Recovery walk still owed: ${v.rp.min - (d.ruckMin||0)} min. Easy pace, no vest. Go now.`];
   if (!d.foods.length && h >= 11) return ['', 'Nothing logged yet. Log every bite as you eat it, not at night from memory.'];
   if (left < 250 && h < 17) return ['', `Only ${Math.max(left,0)} kcal left before dinner. Protein and vegetables only from here.`];
   if (pLeft > 40 && h >= 15) return ['', `${pLeft} g protein still to go. Next meal: chicken, fish, eggs or tuna first.`];
@@ -388,7 +390,8 @@ function renderToday(){
   <div class="card">
     <div class="spread"><h2>Orders · ${DOW[parseYmd(date).getDay()]} ${date.slice(5)}</h2>
       <span class="pill ${status[0]}"><span class="dot"></span>${status[1]}</span></div>
-    <ul class="orders">${v.items.map(i => `<li><span class="mark ${i.s}">${MARK[i.s]}</span><span>${esc(i.label)}</span><span class="num small muted">${esc(i.val)}</span></li>`).join('')}</ul>
+    <ul class="orders">${v.items.map(i => `<li data-jump="${i.k}" role="button" tabindex="0"><span class="mark ${i.s}">${MARK[i.s]}</span><span>${esc(i.label)}</span><span class="num small muted">${esc(i.val)} ›</span></li>`).join('')}</ul>
+    <div class="small muted">Boxes tick themselves when you log. Tap an order to go to where you log it.</div>
     ${v.rp.why.length ? `<div class="small" style="color:var(--bad)">${v.rp.why.map(esc).join(' · ')}</div>` : ''}
     <div class="coach ${ctone}">${esc(cline)}</div>
     <div class="small muted">Streak: <b class="num">${streak()}</b> day(s) fully on plan.</div>
@@ -418,7 +421,7 @@ function renderToday(){
 
   ${uid ? activityCard(date) : ''}
 
-  <div class="card">
+  <div class="card" id="cardWater">
     <div class="spread"><h3>Water</h3><span class="num small muted">${wml} / ${wg} ml</span></div>
     <div class="bar"><i style="width:${Math.min(100, wml / wg * 100)}%;background:var(--accent)"></i></div>
     <div class="row"><button class="btn primary" data-water="250">+ Glass 250 ml</button><button class="btn" data-water="500">+ Bottle 500 ml</button><button class="btn ghost" data-water="-250">−250</button></div>
@@ -428,12 +431,12 @@ function renderToday(){
         : '<button class="btn" data-act="remind-on" style="margin-top:6px">Turn on drink reminders</button>'}</div>
   </div>
 
-  <div class="card">
-    <div class="spread"><h3>Ruck</h3><span class="num small muted">${d.ruckMin||0} / ${v.rp.min} min · ≈${Math.round((d.ruckMin||0) * ruckRate(v.t.w))} kcal burned</span></div>
+  <div class="card" id="cardRuck">
+    <div class="spread"><h3>${v.rp.vest ? 'Ruck' : 'Recovery walk · no vest'}</h3><span class="num small muted">${d.ruckMin||0} / ${v.rp.min} min · ≈${Math.round((d.ruckMin||0) * ruckRate(v.t.w))} kcal burned</span></div>
     <div class="bar"><i style="width:${Math.min(100,(d.ruckMin||0)/v.rp.min*100)}%"></i></div>
     <div class="row">
       ${d.ruckStart ? `<span class="timer" id="ruckClock">${running}:00</span><button class="btn primary" data-act="ruck-stop">Stop & log</button>`
-                   : `<button class="btn primary" data-act="ruck-start">Start ruck timer</button>`}
+                   : `<button class="btn primary" data-act="ruck-start">Start ${v.rp.vest ? 'ruck' : 'walk'} timer</button>`}
       <button class="btn" data-ruck="15">+15</button><button class="btn" data-ruck="30">+30</button><button class="btn" data-ruck="-15">−15</button>
     </div>
     <div class="small muted">The timer runs on any device: start it on your phone, stop it on your laptop. Ruck burn is not added back to your food budget.</div>
@@ -496,7 +499,7 @@ function activityCard(date){
   if (!h) return `<div class="card"><h3>Activity</h3><div class="small muted">No Apple Health data yet today. It arrives when the Cutline Health shortcut runs (automatically at the times you set, or tap it on your iPhone).</div></div>`;
   const steps = Number(h.steps || 0);
   const at = h.updated_at ? new Date(h.updated_at) : null;
-  return `<div class="card">
+  return `<div class="card" id="cardActivity">
     <div class="spread"><h3>Activity · Apple Health</h3><span class="small muted">${at ? 'updated ' + z(at.getHours()) + ':' + z(at.getMinutes()) : ''}</span></div>
     <div class="spread"><span class="big num">${steps.toLocaleString()}</span><span class="small muted num">/ ${STEP_GOAL.toLocaleString()} steps</span></div>
     <div class="bar"><i style="width:${Math.min(100, steps / STEP_GOAL * 100)}%"></i></div>
@@ -690,7 +693,23 @@ function renderSetup(){
 }
 
 /* ---------- events ---------- */
+function jumpTo(k){
+  const go = tab => { activeTab = tab; showTab(); scrollTo(0, 0); };
+  if (k === 'kcal' || k === 'protein') return go('food');
+  if (k === 'lift') return go('train');
+  const el = {ruck:'#cardRuck', water:'#cardWater', weigh:'#wIn', steps:'#cardActivity'}[k];
+  const t = el && $(el);
+  if (!t) return go('setup');
+  t.scrollIntoView({behavior:'smooth', block:'center'});
+  if (k === 'weigh') t.focus({preventScroll:true});
+}
+document.addEventListener('keydown', e => {
+  const j = e.target.closest && e.target.closest('[data-jump]');
+  if (j && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); jumpTo(j.dataset.jump); }
+});
 document.addEventListener('click', async e => {
+  const j = e.target.closest('[data-jump]');
+  if (j) { jumpTo(j.dataset.jump); return; }
   const b = e.target.closest('button, input.chk'); if (!b) return;
   const date = today();
   if (b.dataset.tab) { activeTab = b.dataset.tab; showTab(); return; }
