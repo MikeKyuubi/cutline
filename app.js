@@ -135,6 +135,20 @@ const ensureDay = date => (days[date] ||= emptyDay(date));
 
 function saveLocal(){ try { localStorage.setItem('cut69', JSON.stringify({profile, days})); } catch {} }
 
+/* Apple Health data arrives from an iPhone Shortcut via the ingest_health database function */
+const STEP_GOAL = 10000;
+let health = {}, healthToken = null;
+try { health = JSON.parse(localStorage.getItem('cut69health') || '{}') || {}; healthToken = localStorage.getItem('cut69htok'); } catch {}
+function saveHealthLocal(){ try { localStorage.setItem('cut69health', JSON.stringify(health)); if (healthToken) localStorage.setItem('cut69htok', healthToken); else localStorage.removeItem('cut69htok'); } catch {} }
+function applyHealthWeights(){
+  // a weight logged in Apple Health (smart scale or manual) fills an empty morning weigh-in
+  const cutoff = addDays(today(), -14);
+  Object.values(health).forEach(h => {
+    const w = parseFloat(h.weight_kg);
+    if (h.date >= cutoff && w > 30 && w < 200 && !getDay(h.date).weight) { ensureDay(h.date).weight = Math.round(w*10)/10; saveDay(h.date); }
+  });
+}
+
 /* sync: every change is saved locally first, then pushed to Supabase; unsent keys survive restarts */
 let sb = null, uid = null, userEmail = '', syncError = null, flushing = false;
 const timers = {}, ver = {};
@@ -296,6 +310,7 @@ function verdict(date){
     ls ? {k:'lift', label:`Dumbbell session ${ls}`, val:`${(d.workoutDone||[]).filter(x=>WORKOUTS[ls].includes(x)).length}/5`, s: st(WORKOUTS[ls].every(x => (d.workoutDone||[]).includes(x)), true)}
        : {k:'lift', label:'No lifting today — 10 min stretching', val:'rest', s:'ok'},
     {k:'weigh', label:'Morning weigh-in', val: d.weight ? d.weight.toFixed(1)+' kg' : '—', s: st(!!d.weight, true)},
+    ...(healthToken && (isToday || health[date]) ? [{k:'steps', label:`Walk ${STEP_GOAL.toLocaleString()} steps`, val: health[date] ? Number(health[date].steps||0).toLocaleString() : '—', s: st(Number((health[date]||{}).steps||0) >= STEP_GOAL, true)}] : []),
     {k:'water', label:`Drink ${(waterGoal(date)/1000).toFixed(1)} L water`, val:`${((d.water||0)/1000).toFixed(2)} L`, s: st((d.water||0) >= waterGoal(date), true)},
   ];
   // a finished day with food logged under budget passes kcal
@@ -394,6 +409,8 @@ function renderToday(){
     </div>
   </div>
 
+  ${uid ? activityCard(date) : ''}
+
   <div class="card">
     <div class="spread"><h3>Water</h3><span class="num small muted">${wml} / ${wg} ml</span></div>
     <div class="bar"><i style="width:${Math.min(100, wml / wg * 100)}%;background:var(--accent)"></i></div>
@@ -464,6 +481,19 @@ function renderTrain(){
       <li><b>Lift days:</b> lift first, ruck later in the day.</li>
       <li><b>Stop</b> for sharp pain in knees, back or feet (normal muscle tiredness is fine). Wear proper shoes, keep the vest snug and high on the chest.</li>
     </ul>
+  </div>`;
+}
+function activityCard(date){
+  const h = health[date];
+  if (!healthToken) return `<div class="card"><div class="spread"><h3>Activity</h3><button class="btn" data-goto="setup">Connect Apple Health</button></div><div class="small muted">Pull steps, distance, active calories and weight from your iPhone automatically.</div></div>`;
+  if (!h) return `<div class="card"><h3>Activity</h3><div class="small muted">No Apple Health data yet today. It arrives when the Cut69 Health shortcut runs (automatically at the times you set, or tap it on your iPhone).</div></div>`;
+  const steps = Number(h.steps || 0);
+  const at = h.updated_at ? new Date(h.updated_at) : null;
+  return `<div class="card">
+    <div class="spread"><h3>Activity · Apple Health</h3><span class="small muted">${at ? 'updated ' + z(at.getHours()) + ':' + z(at.getMinutes()) : ''}</span></div>
+    <div class="spread"><span class="big num">${steps.toLocaleString()}</span><span class="small muted num">/ ${STEP_GOAL.toLocaleString()} steps</span></div>
+    <div class="bar"><i style="width:${Math.min(100, steps / STEP_GOAL * 100)}%"></i></div>
+    <div class="small muted num">${h.distance_km != null ? Number(h.distance_km).toFixed(1) + ' km · ' : ''}${h.active_kcal != null ? Math.round(h.active_kcal) + ' active kcal (not added to your food budget)' : ''}${h.weight_kg ? ' · Health weight ' + Number(h.weight_kg).toFixed(1) + ' kg' : ''}</div>
   </div>`;
 }
 function exCard(id, d, checkable){
@@ -617,6 +647,30 @@ function renderSetup(){
       : `<div class="small">You are using this device only. Sign in with the same account on your phone and laptop to sync.</div>
       <div class="row"><button class="btn primary" data-act="showauth" ${sb ? '' : 'disabled'}>Sign in to sync</button></div>`}
   </div>
+  ${uid ? `<div class="card">
+    <h3>Apple Health (iPhone)</h3>
+    ${healthToken ? `<div class="small">Build the <b>Cut69 Health</b> shortcut on your iPhone using these three values (tap to copy), then follow the steps below.</div>
+      <div class="fields">
+        <div class="field"><span class="label">1 · URL</span><button class="btn" data-copy="${esc(cfg().url + '/rest/v1/rpc/ingest_health')}">Copy URL</button></div>
+        <div class="field"><span class="label">2 · apikey header</span><button class="btn" data-copy="${esc(cfg().key)}">Copy key</button></div>
+        <div class="field"><span class="label">3 · Your link code</span><button class="btn" data-copy="${esc(healthToken)}">Copy code</button></div>
+      </div>
+      <details><summary class="small" style="cursor:pointer"><b>How to build the shortcut</b></summary>
+      <ol class="small" style="display:grid;gap:6px;padding-left:20px">
+        <li>Open <b>Shortcuts</b> → <b>+</b>. Name it <b>Cut69 Health</b>.</li>
+        <li>Add <b>Find Health Samples</b>: type <b>Steps</b>, Start Date <b>is today</b>. Then <b>Calculate Statistics</b> → <b>Sum</b>.</li>
+        <li>Repeat for <b>Walking + Running Distance</b> (Sum) and <b>Active Energy</b> (Sum).</li>
+        <li>Add <b>Find Health Samples</b>: type <b>Weight</b>, Start Date <b>is today</b>, Sort by <b>Start Date</b>, Order <b>Latest First</b>, Limit <b>1</b>.</li>
+        <li>Add <b>Format Date</b>: Current Date, Date Format <b>Custom</b>, <code>yyyy-MM-dd</code>.</li>
+        <li>Add <b>Get Contents of URL</b>: paste the URL. Method <b>POST</b>. Headers: <code>apikey</code> = the key, <code>Content-Type</code> = <code>application/json</code>. Request Body <b>JSON</b>, all fields type <b>Text</b>: <code>p_token</code> = your link code, <code>p_date</code> = Formatted Date, <code>p_steps</code> = the steps Sum, <code>p_distance_km</code> = the distance Sum, <code>p_active_kcal</code> = the energy Sum, <code>p_weight_kg</code> = the weight sample.</li>
+        <li>Run it once and tap <b>Allow</b> for Health access. Today's steps should appear in this app within seconds.</li>
+        <li>Make it automatic: <b>Automation</b> → <b>+</b> → <b>Time of Day</b> (e.g. 12:00, daily) → <b>Run Immediately</b> → action <b>Run Shortcut: Cut69 Health</b>. Add more for 18:00 and 21:30.</li>
+      </ol>
+      <div class="small muted">If it fails with a 401 error, add a second header <code>Authorization</code> = <code>Bearer </code> followed by the same key.</div></details>
+      <div class="row"><button class="btn ghost" data-act="health-token">Make a new link code</button><span class="small muted">The old code stops working.</span></div>`
+    : `<div class="small">Steps, distance, active calories and weight from your iPhone, sent here by an iPhone Shortcut a few times a day.</div>
+      <div class="row"><button class="btn primary" data-act="health-token">Connect Apple Health</button></div>`}
+  </div>` : ''}
   <form class="card" id="aiForm">
     <h3>Claude food help</h3>
     <div class="small muted">Your API key stays on this device and is never synced. Enter it once on each device. Create one at console.anthropic.com under API keys, and set a monthly spend limit there.</div>
@@ -649,6 +703,17 @@ document.addEventListener('click', async e => {
   if (act === 'ruck-start') { ensureDay(date).ruckStart = Date.now(); saveDay(date); }
   if (act === 'ruck-stop') { const d = ensureDay(date); d.ruckMin = (d.ruckMin||0) + Math.max(1, Math.round((Date.now()-d.ruckStart)/60000)); d.ruckStart = null; saveDay(date); }
   if (act === 'suggest') suggest(b);
+  if (b.dataset.copy) {
+    try { await navigator.clipboard.writeText(b.dataset.copy); const t = b.textContent; b.textContent = 'Copied'; setTimeout(() => { b.textContent = t; }, 1500); }
+    catch { b.textContent = b.dataset.copy; }
+    return;
+  }
+  if (act === 'health-token') {
+    const tok = [...crypto.getRandomValues(new Uint8Array(18))].map(x => x.toString(16).padStart(2, '0')).join('');
+    const r = await sb.from('health_tokens').upsert({user_id: uid, token: tok});
+    if (r.error) { alertBox('Could not create a link code: ' + r.error.message + '. Run the latest supabase/schema.sql first.'); return; }
+    healthToken = tok; saveHealthLocal(); render();
+  }
   if (act === 'signout') { await sb.auth.signOut(); }
   if (act === 'syncnow') { await flush(); await pull(); }
   if (act === 'showauth') { try { localStorage.removeItem('cut69localOnly'); } catch {} showAuth(true); }
@@ -824,6 +889,7 @@ async function pull(){
     sb.from('days').select('date,data').eq('user_id', uid).order('date', {ascending:false}).limit(400),
   ]);
   if (p.error || d.error) { syncError = (p.error || d.error).message; setSync(); return; }
+  pullHealth();
   if (!p.data && !d.data.length) {
     // brand-new account: upload whatever this device already has
     markDirty('profile'); Object.keys(days).forEach(k => markDirty('d:'+k)); return;
@@ -833,6 +899,15 @@ async function pull(){
   d.data.forEach(r => { remote[r.date] = r.data; });
   Object.keys(days).forEach(k => { if (dirty.has('d:'+k)) remote[k] = days[k]; });
   days = remote; syncError = null; saveLocal(); render();
+}
+async function pullHealth(){
+  const [h, t] = await Promise.all([
+    sb.from('health').select('*').eq('user_id', uid).order('date', {ascending:false}).limit(60),
+    sb.from('health_tokens').select('token').eq('user_id', uid).maybeSingle(),
+  ]);
+  if (!h.error) { health = {}; h.data.forEach(r => { health[r.date] = r; }); }
+  if (!t.error) healthToken = t.data ? t.data.token : null;
+  saveHealthLocal(); applyHealthWeights(); render();
 }
 let channel = null;
 function listen(){
@@ -848,6 +923,11 @@ function listen(){
       if (!r || !r.data || dirty.has('profile')) return;
       profile = {...DEFAULT_PROFILE, ...r.data}; saveLocal(); render();
     })
+    .on('postgres_changes', {event:'*', schema:'public', table:'health', filter:'user_id=eq.' + uid}, payload => {
+      const r = payload.new;
+      if (!r || !r.date) return;
+      health[r.date] = r; saveHealthLocal(); applyHealthWeights(); render();
+    })
     .subscribe();
 }
 async function onSession(session){
@@ -857,7 +937,7 @@ async function onSession(session){
   if (uid) {
     try {
       const prev = localStorage.getItem('cut69uid');
-      if (prev && prev !== uid) { days = {}; profile = clone(DEFAULT_PROFILE); dirty.clear(); persistDirty(); }
+      if (prev && prev !== uid) { days = {}; profile = clone(DEFAULT_PROFILE); dirty.clear(); persistDirty(); health = {}; healthToken = null; saveHealthLocal(); }
       localStorage.setItem('cut69uid', uid);
     } catch {}
     showAuth(false); listen(); await flush(); await pull();
@@ -868,6 +948,7 @@ async function onSession(session){
   }
   render();
 }
+function alertBox(t){ const c = document.createElement('div'); c.className = 'coach bad'; c.textContent = t; const sec = $('#tab-' + activeTab); sec.prepend(c); setTimeout(() => c.remove(), 8000); }
 function authMsg(t, bad){ const m = $('#authMsg'); m.textContent = t; m.style.color = bad ? 'var(--bad)' : 'var(--muted)'; }
 document.addEventListener('submit', async e => {
   if (e.target.id === 'connectForm') {
