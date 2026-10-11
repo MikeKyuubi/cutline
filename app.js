@@ -45,6 +45,9 @@ const FOODS = {
     ['Taho, small',150,6,'limit'],
     ['Mang Inasal PM1 + 1 rice',600,34,'limit'],
     ['Jollibee 1-pc Chickenjoy + rice',560,30,'limit'],
+    ['Starbucks matcha latte, tall, nonfat milk',150,9,'limit'],
+    ['Starbucks matcha latte, grande, 2% milk',240,12,'limit'],
+    ['Starbucks matcha Frappuccino, grande',420,6,'avoid'],
     ['Pork sisig (serving)',550,25,'avoid'],
     ['Lechon kawali (150 g)',650,28,'avoid'],
     ['Extra rice (unli-rice round)',205,4,'avoid'],
@@ -62,6 +65,7 @@ const FOODS = {
     ['Lu rou fan, small',450,12,'avoid'],
     ['Fried chicken cutlet (ji pai)',600,30,'avoid'],
     ['Bubble milk tea, full sugar',450,4,'avoid'],
+    ['Starbucks matcha latte, grande, 2% milk',240,12,'limit'],
   ],
   hotel: [
     ['Hotel breakfast: 3-egg omelette, veg',260,20,'go'],
@@ -114,7 +118,8 @@ const LIFT_DAYS = [1,3,5]; // Mon Wed Fri
 
 /* ---------- state ---------- */
 const DEFAULT_PROFILE = {age:30, sex:'m', heightCm:176, startKg:74, goalKg:69, startDate:today(),
-  activity:1.3, vestKg:10, coffeeType:'gold', region:'ph', location:'', adjust:0, penalties:true};
+  activity:1.3, vestKg:10, coffeeType:'gold', region:'ph', location:'', adjust:0, penalties:true,
+  waterRemind:false, remindEvery:60, wakeHour:7, sleepHour:22};
 let profile = clone(DEFAULT_PROFILE);
 let days = {};
 let mode = 'local';
@@ -124,7 +129,7 @@ let activeTab = 'today';
 try { const s = JSON.parse(localStorage.getItem('cut69') || 'null'); if (s) { profile = {...profile, ...s.profile}; days = s.days || {}; } } catch {}
 try { const t = localStorage.getItem('cut69tab'); if (t) activeTab = t; } catch {}
 
-const emptyDay = date => ({date, weight:null, foods:[], coffee:0, ruckMin:0, ruckStart:null, workoutDone:[]});
+const emptyDay = date => ({date, weight:null, foods:[], coffee:0, water:0, waterAt:null, ruckMin:0, ruckStart:null, workoutDone:[]});
 const getDay = date => days[date] || emptyDay(date);
 const ensureDay = date => (days[date] ||= emptyDay(date));
 
@@ -242,6 +247,44 @@ function liftSession(date){
   for (let d = profile.startDate; d < date; d = addDays(d,1)) if (LIFT_DAYS.includes(parseYmd(d).getDay())) n++;
   return n % 2 ? 'B' : 'A';
 }
+function waterGoal(date){
+  const base = Math.round(targets(date).w * 35 / 250) * 250;
+  const extra = Math.round((getDay(date).ruckMin || 0) / 60 * 500 / 250) * 250;
+  return base + extra;
+}
+function waterDue(){
+  if (!profile.waterRemind) return false;
+  const now = new Date(), h = now.getHours();
+  if (h < Number(profile.wakeHour) || h >= Number(profile.sleepHour)) return false;
+  const d = getDay(today());
+  if ((d.water || 0) >= waterGoal(today())) return false;
+  const wake = new Date(); wake.setHours(Number(profile.wakeHour), 0, 0, 0);
+  const last = Math.max(d.waterAt || 0, wake.getTime());
+  return Date.now() - last >= Number(profile.remindEvery) * 60000;
+}
+let lastNotified = 0;
+function notifyWater(){
+  const left = waterGoal(today()) - (getDay(today()).water || 0);
+  const body = `Time for a glass of water. ${left} ml to go today.`;
+  try {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.ready.then(r => r.showNotification('Drink water', {body, icon:'icons/icon-192.png', tag:'water', renotify:true}));
+    } else new Notification('Drink water', {body, tag:'water'});
+  } catch {}
+}
+setInterval(() => {
+  if (!waterDue()) return;
+  if (Date.now() - lastNotified >= Number(profile.remindEvery) * 60000) { lastNotified = Date.now(); notifyWater(); }
+  renderToday();
+}, 60000);
+async function enableReminders(){
+  let perm = 'unsupported';
+  try { if ('Notification' in window) perm = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission; } catch {}
+  profile.waterRemind = true; saveProfile();
+  return perm;
+}
+
 function verdict(date){
   const d = getDay(date), t = targets(date), tot = dayTotals(d), rp = ruckPlan(date), ls = liftSession(date);
   const isToday = date === today();
@@ -253,6 +296,7 @@ function verdict(date){
     ls ? {k:'lift', label:`Dumbbell session ${ls}`, val:`${(d.workoutDone||[]).filter(x=>WORKOUTS[ls].includes(x)).length}/5`, s: st(WORKOUTS[ls].every(x => (d.workoutDone||[]).includes(x)), true)}
        : {k:'lift', label:'No lifting today — 10 min stretching', val:'rest', s:'ok'},
     {k:'weigh', label:'Morning weigh-in', val: d.weight ? d.weight.toFixed(1)+' kg' : '—', s: st(!!d.weight, true)},
+    {k:'water', label:`Drink ${(waterGoal(date)/1000).toFixed(1)} L water`, val:`${((d.water||0)/1000).toFixed(2)} L`, s: st((d.water||0) >= waterGoal(date), true)},
   ];
   // a finished day with food logged under budget passes kcal
   if (!isToday && d.foods.length && tot.total <= t.kcal + 50) items[0].s = 'ok';
@@ -313,7 +357,12 @@ function renderToday(){
   const running = d.ruckStart ? Math.floor((Date.now() - d.ruckStart)/60000) : 0;
   const ls = v.ls;
   const status = v.passed ? ['ok','ON PLAN'] : v.failed ? ['bad','OFF PLAN'] : ['warn','IN PROGRESS'];
+  const wg = waterGoal(date), wml = d.water || 0;
+  const sinceDrink = d.waterAt ? Math.round((Date.now() - d.waterAt) / 60000) : null;
+  let notifState = 'unsupported';
+  try { if ('Notification' in window) notifState = Notification.permission; } catch {}
   $('#tab-today').innerHTML = `
+  ${waterDue() ? `<div class="coach bad">Drink water now: one glass (250 ml). ${sinceDrink == null ? 'Nothing logged yet today.' : `Last glass ${sinceDrink} min ago.`} <button class="btn" data-water="250" style="margin-left:6px">Done +250 ml</button></div>` : ''}
   <div class="card">
     <div class="spread"><h2>Orders · ${DOW[parseYmd(date).getDay()]} ${date.slice(5)}</h2>
       <span class="pill ${status[0]}"><span class="dot"></span>${status[1]}</span></div>
@@ -343,6 +392,16 @@ function renderToday(){
       <form class="row" id="wForm"><input id="wIn" type="number" step="0.1" min="30" max="200" inputmode="decimal" placeholder="kg" value="${d.weight ?? ''}" style="width:110px"><button class="btn primary" type="submit">Save</button></form>
       <div class="small muted">Weigh after the toilet, before food or coffee. Daily numbers jump ±1 kg from water; the 7-day average is what counts.</div>
     </div>
+  </div>
+
+  <div class="card">
+    <div class="spread"><h3>Water</h3><span class="num small muted">${wml} / ${wg} ml</span></div>
+    <div class="bar"><i style="width:${Math.min(100, wml / wg * 100)}%;background:var(--accent)"></i></div>
+    <div class="row"><button class="btn primary" data-water="250">+ Glass 250 ml</button><button class="btn" data-water="500">+ Bottle 500 ml</button><button class="btn ghost" data-water="-250">−250</button></div>
+    <div class="small muted">Goal is 35 ml per kg of body weight plus 500 ml per hour of rucking. Coffee doesn't count toward it.
+      ${profile.waterRemind
+        ? `Reminders every ${profile.remindEvery} min, ${profile.wakeHour}:00–${profile.sleepHour}:00${notifState === 'granted' ? ' (notifications on)' : notifState === 'denied' ? '. Notifications are blocked in this browser, so you will only see the reminder inside the app' : ', inside the app'}.`
+        : '<button class="btn" data-act="remind-on" style="margin-top:6px">Turn on drink reminders</button>'}</div>
   </div>
 
   <div class="card">
@@ -532,6 +591,8 @@ function renderSetup(){
       <label class="field"><span class="label">Your coffee</span><select id="sCoffee">${Object.entries(COFFEE).map(([k,c]) => `<option value="${k}" ${k===profile.coffeeType?'selected':''}>${c.label} (${c.kcal})</option>`).join('')}</select></label>
       <label class="field"><span class="label">Food list</span><select id="sRegion">${Object.keys(FOODS).map(k => `<option value="${k}" ${k===profile.region?'selected':''}>${REGION_LABEL[k]}</option>`).join('')}</select></label>
       <label class="field"><span class="label">Calorie adjustment</span><select id="sAdj">${[0,-150,-300,150].map(a => `<option value="${a}" ${a===Number(profile.adjust)?'selected':''}>${a>0?'+':''}${a} kcal</option>`).join('')}</select></label>
+      <label class="field"><span class="label">Drink reminders</span><select id="sRemind"><option value="0" ${!profile.waterRemind?'selected':''}>Off</option>${[45,60,90,120].map(m => `<option value="${m}" ${profile.waterRemind && Number(profile.remindEvery)===m?'selected':''}>Every ${m} min</option>`).join('')}</select></label>
+      <label class="field"><span class="label">Awake from / until (hour)</span><span class="row" style="flex-wrap:nowrap"><input id="sWake" type="number" min="0" max="23" value="${profile.wakeHour}"><input id="sSleep" type="number" min="1" max="24" value="${profile.sleepHour}"></span></label>
       <label class="field"><span class="label">Strict penalties</span><select id="sPen"><option value="1" ${profile.penalties?'selected':''}>On: missed ruck or overeating adds ruck time</option><option value="0" ${!profile.penalties?'selected':''}>Off</option></select></label>
     </div>
     <div class="row"><button class="btn primary" type="submit">Save</button><span class="small muted" id="setupMsg"></span></div>
@@ -576,11 +637,13 @@ document.addEventListener('click', async e => {
   if (b.dataset.cup != null) { const d = ensureDay(date), i = +b.dataset.cup; d.coffee = d.coffee > i && d.coffee === i+1 ? i : Math.max(d.coffee, i+1); saveDay(date); return; }
   if (b.dataset.ex) { const d = ensureDay(date); d.workoutDone = d.workoutDone || []; const id = b.dataset.ex;
     d.workoutDone = b.checked ? [...new Set([...d.workoutDone, id])] : d.workoutDone.filter(x => x !== id); saveDay(date); return; }
+  if (b.dataset.water) { const d = ensureDay(date), n = Number(b.dataset.water); d.water = Math.max(0, (d.water||0) + n); if (n > 0) d.waterAt = Date.now(); saveDay(date); return; }
   if (b.dataset.ruck) { const d = ensureDay(date); d.ruckMin = Math.max(0, (d.ruckMin||0) + Number(b.dataset.ruck)); saveDay(date); return; }
   if (b.dataset.delfood != null) { const d = ensureDay(date); d.foods.splice(+b.dataset.delfood, 1); saveDay(date); return; }
   if (b.dataset.addfood) { const [name,kcal,protein] = b.dataset.addfood.split('|'); logFood(name, +kcal, +protein); return; }
   if (b.dataset.rest != null) { startRest(+b.dataset.rest); return; }
   const act = b.dataset.act;
+  if (act === 'remind-on') { await enableReminders(); }
   if (act === 'coffee-extra') { ensureDay(date).coffee++; saveDay(date); }
   if (act === 'coffee-undo') { const d = ensureDay(date); d.coffee = Math.max(0, d.coffee-1); saveDay(date); }
   if (act === 'ruck-start') { ensureDay(date).ruckStart = Date.now(); saveDay(date); }
@@ -608,7 +671,10 @@ document.addEventListener('submit', e => {
     const n = (id, d) => { const v = parseFloat($(id).value); return isFinite(v) ? v : d; };
     profile = {...profile, age:n('#sAge',profile.age), sex:$('#sSex').value, heightCm:n('#sH',profile.heightCm), startKg:n('#sStart',profile.startKg),
       goalKg:n('#sGoal',profile.goalKg), startDate:$('#sDate').value || profile.startDate, activity:Number($('#sAct').value), vestKg:n('#sVest',profile.vestKg),
-      coffeeType:$('#sCoffee').value, region:$('#sRegion').value, adjust:Number($('#sAdj').value), penalties:$('#sPen').value === '1'};
+      coffeeType:$('#sCoffee').value, region:$('#sRegion').value, adjust:Number($('#sAdj').value), penalties:$('#sPen').value === '1',
+      waterRemind:$('#sRemind').value !== '0', remindEvery:$('#sRemind').value !== '0' ? Number($('#sRemind').value) : profile.remindEvery,
+      wakeHour:n('#sWake',profile.wakeHour), sleepHour:n('#sSleep',profile.sleepHour)};
+    if (profile.waterRemind) enableReminders();
     setupDirty = false; saveProfile(); $('#setupMsg') && ($('#setupMsg').textContent = 'Saved');
   }
 });

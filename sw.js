@@ -1,5 +1,5 @@
 // Offline support: the app shell is network-first (so updates arrive), libraries and fonts are cache-first.
-const CACHE = 'cut69-v1';
+const CACHE = 'cut69-v2';
 const SHELL = ['./', 'index.html', 'app.js', 'config.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/apple-touch-icon.png'];
 const LIB_HOSTS = ['cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
@@ -23,4 +23,13 @@ self.addEventListener('fetch', e => {
     })));
   }
   // everything else (Supabase, Anthropic API) goes straight to the network
+});
+
+// tapping a reminder opens (or focuses) the app
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({type: 'window', includeUncontrolled: true}).then(list => {
+    const open = list.find(c => 'focus' in c);
+    return open ? open.focus() : self.clients.openWindow('./');
+  }));
 });
