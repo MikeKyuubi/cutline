@@ -27,6 +27,8 @@ const ACTIVITY = {1.3:'Desk / hotel, little walking', 1.4:'Light (some walking)'
 // kcal and protein are typical estimates. tag: go = fits a cut, limit = OK occasionally, avoid = blows the budget
 const FOODS = {
   ph: [
+    ['ProMatrix 7 shake, 1 scoop in water',130,25,'go'],
+    ['ProMatrix 7, ½ scoop in coffee',65,13,'go'],
     ['Grilled chicken breast (150 g)',250,45,'go'],
     ['Chicken inasal, paa — skin off',290,32,'go'],
     ['Inihaw na bangus, half',260,30,'go'],
@@ -72,6 +74,7 @@ const FOODS = {
     ['Starbucks matcha latte, grande, 2% milk',240,12,'limit'],
   ],
   hotel: [
+    ['ProMatrix 7 shake, 1 scoop in water',130,25,'go'],
     ['Hotel breakfast: 3-egg omelette, veg',260,20,'go'],
     ['Hotel breakfast: 2 boiled eggs + fruit',220,13,'go'],
     ['Grilled fish fillet (150 g)',220,35,'go'],
