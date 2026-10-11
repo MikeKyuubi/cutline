@@ -48,6 +48,7 @@ const FOODS = {
     ['Starbucks matcha latte, tall, nonfat milk',150,9,'limit'],
     ['Starbucks matcha latte, grande, 2% milk',240,12,'limit'],
     ['Starbucks matcha Frappuccino, grande',420,6,'avoid'],
+    ['7-Eleven grilled liempo + kangkong meal',839,16,'avoid'],
     ['Pork sisig (serving)',550,25,'avoid'],
     ['Lechon kawali (150 g)',650,28,'avoid'],
     ['Extra rice (unli-rice round)',205,4,'avoid'],
