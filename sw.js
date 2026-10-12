@@ -1,5 +1,5 @@
 // Offline support: the app shell is network-first (so updates arrive), libraries and fonts are cache-first.
-const CACHE = 'cutline-v3';
+const CACHE = 'cutline-v4';
 const SHELL = ['./', 'index.html', 'app.js', 'config.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/apple-touch-icon.png'];
 const LIB_HOSTS = ['cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
@@ -14,7 +14,8 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin === location.origin) {
-    e.respondWith(fetch(req).then(res => {
+    // no-cache: always check GitHub for a newer version instead of trusting the 10-minute browser cache
+    e.respondWith(fetch(req.url, {cache: 'no-cache', credentials: 'same-origin'}).then(res => {
       const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); return res;
     }).catch(() => caches.match(req, {ignoreSearch: true}).then(r => r || caches.match('index.html'))));
   } else if (LIB_HOSTS.includes(url.hostname)) {
