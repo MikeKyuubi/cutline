@@ -659,11 +659,10 @@ function renderSetup(){
   </div>
   ${uid ? `<div class="card">
     <h3>Apple Health (iPhone)</h3>
-    ${healthToken ? `<div class="small">Build the <b>Cutline Health</b> shortcut on your iPhone using these three values (tap to copy), then follow the steps below.</div>
+    ${healthToken ? `<div class="small">Build the <b>Cutline Health</b> shortcut on your iPhone using these two values (tap to copy), then follow the steps below.</div>
       <div class="fields">
-        <div class="field"><span class="label">1 · URL</span><button class="btn" data-copy="${esc(cfg().url + '/rest/v1/rpc/ingest_health')}">Copy URL</button></div>
-        <div class="field"><span class="label">2 · apikey header</span><button class="btn" data-copy="${esc(cfg().key)}">Copy key</button></div>
-        <div class="field"><span class="label">3 · Your link code</span><button class="btn" data-copy="${esc(healthToken)}">Copy code</button></div>
+        <div class="field"><span class="label">1 · URL</span><button class="btn" data-copy="${esc(cfg().url + '/rest/v1/rpc/ingest_health?apikey=' + cfg().key)}">Copy URL</button></div>
+        <div class="field"><span class="label">2 · Your link code</span><button class="btn" data-copy="${esc(healthToken)}">Copy code</button></div>
       </div>
       <details><summary class="small" style="cursor:pointer"><b>How to build the shortcut</b></summary>
       <ol class="small" style="display:grid;gap:6px;padding-left:20px">
@@ -672,11 +671,11 @@ function renderSetup(){
         <li>Repeat for <b>Walking + Running Distance</b> (Sum) and <b>Active Energy</b> (Sum).</li>
         <li>Add <b>Find Health Samples</b>: type <b>Weight</b>, Start Date <b>is today</b>, Sort by <b>Start Date</b>, Order <b>Latest First</b>, Limit <b>1</b>.</li>
         <li>Add <b>Format Date</b>: Current Date, Date Format <b>Custom</b>, <code>yyyy-MM-dd</code>.</li>
-        <li>Add <b>Get Contents of URL</b>: paste the URL. Method <b>POST</b>. Headers: <code>apikey</code> = the key, <code>Content-Type</code> = <code>application/json</code>. Request Body <b>JSON</b>, all fields type <b>Text</b>: <code>p_token</code> = your link code, <code>p_date</code> = Formatted Date, <code>p_steps</code> = the steps Sum, <code>p_distance_km</code> = the distance Sum, <code>p_active_kcal</code> = the energy Sum, <code>p_weight_kg</code> = the weight sample.</li>
+        <li>Add <b>Get Contents of URL</b>: paste the URL. Method <b>POST</b>. No headers needed (the key is already in the URL). Request Body <b>JSON</b>, all fields type <b>Text</b>: <code>p_token</code> = your link code, <code>p_date</code> = Formatted Date, <code>p_steps</code> = the steps Sum, <code>p_distance_km</code> = the distance Sum, <code>p_active_kcal</code> = the energy Sum, <code>p_weight_kg</code> = the weight sample.</li>
         <li>Run it once and tap <b>Allow</b> for Health access. Today's steps should appear in this app within seconds.</li>
         <li>Make it automatic: <b>Automation</b> → <b>+</b> → <b>Time of Day</b> (e.g. 12:00, daily) → <b>Run Immediately</b> → action <b>Run Shortcut: Cutline Health</b>. Add more for 18:00 and 21:30.</li>
       </ol>
-      <div class="small muted">Only the <code>apikey</code> header is needed. Don't add an Authorization header.</div></details>
+      <div class="small muted">If the reply is "400 Bad Request", delete every header in the action and use the URL from Copy URL, which already contains the key.</div></details>
       <div class="row"><button class="btn ghost" data-act="health-token">Make a new link code</button><span class="small muted">The old code stops working.</span></div>`
     : `<div class="small">Steps, distance, active calories and weight from your iPhone, sent here by an iPhone Shortcut a few times a day.</div>
       <div class="row"><button class="btn primary" data-act="health-token">Connect Apple Health</button></div>`}
