@@ -132,7 +132,7 @@ const LIFT_DAYS = [1,3,5]; // Mon Wed Fri
 
 /* ---------- state ---------- */
 const DEFAULT_PROFILE = {age:30, sex:'m', heightCm:167, startKg:74, goalKg:69, startDate:today(),
-  activity:1.3, vestKg:10, dbKg:15, coffeeType:'gold', region:'ph', location:'', adjust:0, penalties:true,
+  activity:1.3, vestKg:10, dbKg:15, stepGoal:8000, coffeeType:'gold', region:'ph', location:'', adjust:0, penalties:true,
   waterRemind:false, remindEvery:60, wakeHour:7, sleepHour:22};
 let profile = clone(DEFAULT_PROFILE);
 let days = {};
@@ -150,7 +150,9 @@ const ensureDay = date => (days[date] ||= emptyDay(date));
 function saveLocal(){ try { localStorage.setItem('cut69', JSON.stringify({profile, days})); } catch {} }
 
 /* Apple Health data arrives from an iPhone Shortcut via the ingest_health database function */
-const STEP_GOAL = 10000;
+const stepGoal = () => Number(profile.stepGoal ?? 8000);
+// steps from Apple Health plus walks logged by hand (phone left behind)
+const stepsFor = date => Number((health[date] || {}).steps || 0) + Number(getDay(date).extraSteps || 0);
 let health = {}, healthToken = null;
 try { health = JSON.parse(localStorage.getItem('cut69health') || '{}') || {}; healthToken = localStorage.getItem('cut69htok'); } catch {}
 function saveHealthLocal(){ try { localStorage.setItem('cut69health', JSON.stringify(health)); if (healthToken) localStorage.setItem('cut69htok', healthToken); else localStorage.removeItem('cut69htok'); } catch {} }
@@ -324,7 +326,7 @@ function verdict(date){
     ls ? {k:'lift', label:`Dumbbell session ${ls}`, val:`${(d.workoutDone||[]).filter(x=>WORKOUTS[ls].includes(x)).length}/5`, s: st(WORKOUTS[ls].every(x => (d.workoutDone||[]).includes(x)), true)}
        : {k:'lift', label:'No lifting today — 10 min stretching', val:'rest', s:'ok'},
     {k:'weigh', label:'Morning weigh-in', val: d.weight ? d.weight.toFixed(1)+' kg' : '—', s: st(!!d.weight, true)},
-    ...(healthToken && (isToday || health[date]) ? [{k:'steps', label:`Walk ${STEP_GOAL.toLocaleString()} steps`, val: health[date] ? Number(health[date].steps||0).toLocaleString() : '—', s: st(Number((health[date]||{}).steps||0) >= STEP_GOAL, true)}] : []),
+    ...(healthToken && stepGoal() && (isToday || health[date] || d.extraSteps) ? [{k:'steps', label:`Walk ${stepGoal().toLocaleString()} steps`, val: stepsFor(date).toLocaleString(), s: st(stepsFor(date) >= stepGoal(), true)}] : []),
     {k:'water', label:`Drink ${(waterGoal(date)/1000).toFixed(1)} L water`, val:`${((d.water||0)/1000).toFixed(2)} L`, s: st((d.water||0) >= waterGoal(date), true)},
   ];
   // a finished day with food logged under budget passes kcal
@@ -503,14 +505,19 @@ function renderTrain(){
 function activityCard(date){
   const h = health[date];
   if (!healthToken) return `<div class="card"><div class="spread"><h3>Activity</h3><button class="btn" data-goto="setup">Connect Apple Health</button></div><div class="small muted">Pull steps, distance, active calories and weight from your iPhone automatically.</div></div>`;
-  if (!h) return `<div class="card" id="cardActivity"><div class="spread"><h3>Activity</h3><a class="btn" href="shortcuts://run-shortcut?name=Cutline%20Health">Update now</a></div><div class="small muted">No Apple Health data yet today. It arrives when the Cutline Health shortcut runs, automatically at the times you set or when you tap Update now on your iPhone.</div></div>`;
-  const steps = Number(h.steps || 0);
-  const at = h.updated_at ? new Date(h.updated_at) : null;
+  const extra = Number(getDay(date).extraSteps || 0), goal = stepGoal() || 8000;
+  const manual = `<div class="row"><span class="small muted">Walked without your phone?</span><button class="btn" data-steps="1000">+1,000</button><button class="btn" data-steps="2000">+2,000</button>${extra ? `<button class="btn ghost" data-steps="-1000">−1,000</button><span class="small muted num">(${extra.toLocaleString()} added by hand)</span>` : ''}</div>
+    <div class="small muted">Rough guide: 10 minutes of brisk walking is about 1,000 steps.</div>`;
+  if (!h && !extra) return `<div class="card" id="cardActivity"><div class="spread"><h3>Activity</h3><a class="btn" href="shortcuts://run-shortcut?name=Cutline%20Health">Update now</a></div><div class="small muted">No Apple Health data yet today. It arrives when the Cutline Health shortcut runs, automatically at the times you set or when you tap Update now on your iPhone.</div>${manual}</div>`;
+  const hh = h || {};
+  const steps = stepsFor(date);
+  const at = hh.updated_at ? new Date(hh.updated_at) : null;
   return `<div class="card" id="cardActivity">
     <div class="spread"><h3>Activity · Apple Health</h3><span class="row small muted">${at ? 'updated ' + z(at.getHours()) + ':' + z(at.getMinutes()) : ''}<button class="btn ghost" data-act="health-refresh" aria-label="Reload from server">↻</button><a class="btn" href="shortcuts://run-shortcut?name=Cutline%20Health">Update now</a></span></div>
-    <div class="spread"><span class="big num">${steps.toLocaleString()}</span><span class="small muted num">/ ${STEP_GOAL.toLocaleString()} steps</span></div>
-    <div class="bar"><i style="width:${Math.min(100, steps / STEP_GOAL * 100)}%"></i></div>
-    <div class="small muted num">${h.distance_km != null ? Number(h.distance_km).toFixed(1) + ' km · ' : ''}${h.active_kcal != null ? Math.round(h.active_kcal) + ' active kcal (not added to your food budget)' : ''}${h.weight_kg ? ' · Health weight ' + Number(h.weight_kg).toFixed(1) + ' kg' : ''}</div>
+    <div class="spread"><span class="big num">${steps.toLocaleString()}</span><span class="small muted num">/ ${goal.toLocaleString()} steps</span></div>
+    <div class="bar"><i style="width:${Math.min(100, steps / goal * 100)}%"></i></div>
+    <div class="small muted num">${hh.distance_km != null ? Number(hh.distance_km).toFixed(1) + ' km · ' : ''}${hh.active_kcal != null ? Math.round(hh.active_kcal) + ' active kcal (not added to your food budget)' : ''}${hh.weight_kg ? ' · Health weight ' + Number(hh.weight_kg).toFixed(1) + ' kg' : ''}</div>
+    ${manual}
   </div>`;
 }
 function exCard(id, d, checkable){
@@ -635,6 +642,7 @@ function renderSetup(){
       <label class="field"><span class="label">Start date</span><input id="sDate" type="date" value="${profile.startDate}"></label>
       <label class="field"><span class="label">Daily activity (outside training)</span><select id="sAct">${Object.entries(ACTIVITY).map(([k,l]) => `<option value="${k}" ${Number(k)===Number(profile.activity)?'selected':''}>${l}</option>`).join('')}</select></label>
       <label class="field"><span class="label">Vest weight kg</span><input id="sVest" type="number" step="0.5" value="${profile.vestKg}"></label>
+      <label class="field"><span class="label">Daily step goal</span><select id="sSteps">${[6000,8000,10000,0].map(g => `<option value="${g}" ${g===stepGoal()?'selected':''}>${g ? g.toLocaleString() + ' steps' : 'Off'}</option>`).join('')}</select></label>
       <label class="field"><span class="label">Dumbbell weight kg</span><input id="sDb" type="number" step="0.5" value="${profile.dbKg || 15}"></label>
       <label class="field"><span class="label">Your coffee</span><select id="sCoffee">${Object.entries(COFFEE).map(([k,c]) => `<option value="${k}" ${k===profile.coffeeType?'selected':''}>${c.label} (${c.kcal})</option>`).join('')}</select></label>
       <label class="field"><span class="label">Food list</span><select id="sRegion">${Object.keys(FOODS).map(k => `<option value="${k}" ${k===profile.region?'selected':''}>${REGION_LABEL[k]}</option>`).join('')}</select></label>
@@ -724,6 +732,7 @@ document.addEventListener('click', async e => {
   if (b.dataset.cup != null) { const d = ensureDay(date), i = +b.dataset.cup; d.coffee = d.coffee > i && d.coffee === i+1 ? i : Math.max(d.coffee, i+1); saveDay(date); return; }
   if (b.dataset.ex) { const d = ensureDay(date); d.workoutDone = d.workoutDone || []; const id = b.dataset.ex;
     d.workoutDone = b.checked ? [...new Set([...d.workoutDone, id])] : d.workoutDone.filter(x => x !== id); saveDay(date); return; }
+  if (b.dataset.steps) { const d = ensureDay(date); d.extraSteps = Math.max(0, (d.extraSteps||0) + Number(b.dataset.steps)); saveDay(date); return; }
   if (b.dataset.water) { const d = ensureDay(date), n = Number(b.dataset.water); d.water = Math.max(0, (d.water||0) + n); if (n > 0) d.waterAt = Date.now(); saveDay(date); return; }
   if (b.dataset.ruck) { const d = ensureDay(date); d.ruckMin = Math.max(0, (d.ruckMin||0) + Number(b.dataset.ruck)); saveDay(date); return; }
   if (b.dataset.delfood != null) { const d = ensureDay(date); d.foods.splice(+b.dataset.delfood, 1); saveDay(date); return; }
@@ -769,7 +778,7 @@ document.addEventListener('submit', e => {
   if (e.target.id === 'setupForm') {
     const n = (id, d) => { const v = parseFloat($(id).value); return isFinite(v) ? v : d; };
     profile = {...profile, age:n('#sAge',profile.age), sex:$('#sSex').value, heightCm:n('#sH',profile.heightCm), startKg:n('#sStart',profile.startKg),
-      goalKg:n('#sGoal',profile.goalKg), startDate:$('#sDate').value || profile.startDate, activity:Number($('#sAct').value), vestKg:n('#sVest',profile.vestKg), dbKg:n('#sDb',profile.dbKg || 15),
+      goalKg:n('#sGoal',profile.goalKg), startDate:$('#sDate').value || profile.startDate, activity:Number($('#sAct').value), vestKg:n('#sVest',profile.vestKg), dbKg:n('#sDb',profile.dbKg || 15), stepGoal:Number($('#sSteps').value),
       coffeeType:$('#sCoffee').value, region:$('#sRegion').value, adjust:Number($('#sAdj').value), penalties:$('#sPen').value === '1',
       waterRemind:$('#sRemind').value !== '0', remindEvery:$('#sRemind').value !== '0' ? Number($('#sRemind').value) : profile.remindEvery,
       wakeHour:n('#sWake',profile.wakeHour), sleepHour:n('#sSleep',profile.sleepHour)};
