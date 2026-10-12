@@ -676,7 +676,7 @@ function renderSetup(){
         <li>Run it once and tap <b>Allow</b> for Health access. Today's steps should appear in this app within seconds.</li>
         <li>Make it automatic: <b>Automation</b> → <b>+</b> → <b>Time of Day</b> (e.g. 12:00, daily) → <b>Run Immediately</b> → action <b>Run Shortcut: Cutline Health</b>. Add more for 18:00 and 21:30.</li>
       </ol>
-      <div class="small muted">If it fails with a 401 error, add a second header <code>Authorization</code> = <code>Bearer </code> followed by the same key.</div></details>
+      <div class="small muted">Only the <code>apikey</code> header is needed. Don't add an Authorization header.</div></details>
       <div class="row"><button class="btn ghost" data-act="health-token">Make a new link code</button><span class="small muted">The old code stops working.</span></div>`
     : `<div class="small">Steps, distance, active calories and weight from your iPhone, sent here by an iPhone Shortcut a few times a day.</div>
       <div class="row"><button class="btn primary" data-act="health-token">Connect Apple Health</button></div>`}
