@@ -14,6 +14,7 @@ const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
 /* ---------- reference data ---------- */
 const COFFEE = {
+  goldns:  {label:'Nescafé Gold + 1 tsp Coffee-mate, no sugar', kcal:14},
   gold:    {label:'Nescafé Gold + 1 tsp sugar + 1 tsp Coffee-mate', kcal:30},
   goldmilk:{label:'Nescafé Gold + 50 ml low-fat milk + stevia', kcal:25},
   black:   {label:'Black / Americano', kcal:5},
