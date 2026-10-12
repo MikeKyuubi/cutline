@@ -117,9 +117,9 @@ const EX = {
   pushup:{name:'Push-up (vest on)',sets:'3 × (max − 2)',vest:true,
     steps:['Hands slightly wider than shoulders, body straight from head to heels.','Lower until your chest is a fist away from the floor, elbows about 45° from your body.','Push the floor away to full lockout.','Too hard with the vest? Take it off or put your hands on the bed.'],
     cue:'Stop every set 2 reps before you would fail.',miss:'Hips sagging, elbows flared wide, half reps.'},
-  ohp:{name:'One-arm overhead press',sets:'3 × 8 per arm',
+  ohp:{name:'One-arm overhead press',sets:'3 × 5–8 per arm',
     steps:['Stand with the dumbbell at your shoulder, palm facing in. Glutes and abs tight.','Press straight up until your arm is beside your ear.','Lower slowly back to the shoulder.','Free hand on your hip. Do not lean away from the weight.'],
-    cue:'Squeeze your glutes so your lower back does not arch.',miss:'Leaning back to finish the rep.'},
+    cue:'Squeeze your glutes so your lower back does not arch. Cannot get 5 strict reps? Hold the dumbbell with both hands, or use a small knee dip to start the press.',miss:'Leaning back to finish the rep.'},
   splitsq:{name:'Bulgarian split squat',sets:'3 × 8 per leg',
     steps:['Stand about two steps in front of the bed or a chair and rest the top of your back foot on it.','Hold the dumbbell at your chest.','Lower straight down until the front thigh is near parallel.','Push through the front heel to stand.'],
     cue:'Most of your weight on the front leg. A slight forward lean is fine.',miss:'Standing too close to the bed, front heel lifting.'},
@@ -132,7 +132,7 @@ const LIFT_DAYS = [1,3,5]; // Mon Wed Fri
 
 /* ---------- state ---------- */
 const DEFAULT_PROFILE = {age:30, sex:'m', heightCm:167, startKg:74, goalKg:69, startDate:today(),
-  activity:1.3, vestKg:10, coffeeType:'gold', region:'ph', location:'', adjust:0, penalties:true,
+  activity:1.3, vestKg:10, dbKg:15, coffeeType:'gold', region:'ph', location:'', adjust:0, penalties:true,
   waterRemind:false, remindEvery:60, wakeHour:7, sleepHour:22};
 let profile = clone(DEFAULT_PROFILE);
 let days = {};
@@ -476,11 +476,11 @@ function renderTrain(){
   </div>
 
   <div class="card">
-    <div class="spread"><h2>${ls ? 'Today: session ' + ls : 'Preview: session A'}</h2><span class="small muted">~35 min · 10 kg dumbbell</span></div>
+    <div class="spread"><h2>${ls ? 'Today: session ' + ls : 'Preview: session A'}</h2><span class="small muted">~40 min · ${profile.dbKg || 15} kg dumbbell</span></div>
     <div class="small"><b>Warm-up, 5 min:</b> 20 arm circles, 15 bodyweight squats, 10 hip hinges, 10 slow lunges, 30 s march in place.</div>
-    <div class="small"><b>Rules:</b> rest 60–90 s between sets. When you can do the top of the rep range on all 3 sets with good form, put the vest on for that exercise (marked VEST) or slow the lowering to 4 seconds.</div>
+    <div class="small"><b>Rules:</b> rest 60–90 s on core work (plank, dead bug) and up to 2–3 min on heavy moves (squat, press, deadlift, row, lunges). Every set still gets done. When you can do the top of the rep range on all 3 sets with good form, put the vest on for that exercise (marked VEST) or slow the lowering to 4 seconds.</div>
     ${WORKOUTS[sess].map(x => exCard(x, d, !!ls)).join('')}
-    <div class="row"><span class="timer" id="restClock">0:00</span><button class="btn" data-rest="60">Rest 60 s</button><button class="btn" data-rest="90">Rest 90 s</button><button class="btn ghost" data-rest="0">Stop</button></div>
+    <div class="row"><span class="timer" id="restClock">0:00</span><button class="btn" data-rest="60">Rest 60 s</button><button class="btn" data-rest="90">Rest 90 s</button><button class="btn" data-rest="150">Rest 2½ min</button><button class="btn ghost" data-rest="0">Stop</button></div>
   </div>
 
   <div class="card">
@@ -635,6 +635,7 @@ function renderSetup(){
       <label class="field"><span class="label">Start date</span><input id="sDate" type="date" value="${profile.startDate}"></label>
       <label class="field"><span class="label">Daily activity (outside training)</span><select id="sAct">${Object.entries(ACTIVITY).map(([k,l]) => `<option value="${k}" ${Number(k)===Number(profile.activity)?'selected':''}>${l}</option>`).join('')}</select></label>
       <label class="field"><span class="label">Vest weight kg</span><input id="sVest" type="number" step="0.5" value="${profile.vestKg}"></label>
+      <label class="field"><span class="label">Dumbbell weight kg</span><input id="sDb" type="number" step="0.5" value="${profile.dbKg || 15}"></label>
       <label class="field"><span class="label">Your coffee</span><select id="sCoffee">${Object.entries(COFFEE).map(([k,c]) => `<option value="${k}" ${k===profile.coffeeType?'selected':''}>${c.label} (${c.kcal})</option>`).join('')}</select></label>
       <label class="field"><span class="label">Food list</span><select id="sRegion">${Object.keys(FOODS).map(k => `<option value="${k}" ${k===profile.region?'selected':''}>${REGION_LABEL[k]}</option>`).join('')}</select></label>
       <label class="field"><span class="label">Calorie adjustment</span><select id="sAdj">${[0,-150,-300,150].map(a => `<option value="${a}" ${a===Number(profile.adjust)?'selected':''}>${a>0?'+':''}${a} kcal</option>`).join('')}</select></label>
@@ -768,7 +769,7 @@ document.addEventListener('submit', e => {
   if (e.target.id === 'setupForm') {
     const n = (id, d) => { const v = parseFloat($(id).value); return isFinite(v) ? v : d; };
     profile = {...profile, age:n('#sAge',profile.age), sex:$('#sSex').value, heightCm:n('#sH',profile.heightCm), startKg:n('#sStart',profile.startKg),
-      goalKg:n('#sGoal',profile.goalKg), startDate:$('#sDate').value || profile.startDate, activity:Number($('#sAct').value), vestKg:n('#sVest',profile.vestKg),
+      goalKg:n('#sGoal',profile.goalKg), startDate:$('#sDate').value || profile.startDate, activity:Number($('#sAct').value), vestKg:n('#sVest',profile.vestKg), dbKg:n('#sDb',profile.dbKg || 15),
       coffeeType:$('#sCoffee').value, region:$('#sRegion').value, adjust:Number($('#sAdj').value), penalties:$('#sPen').value === '1',
       waterRemind:$('#sRemind').value !== '0', remindEvery:$('#sRemind').value !== '0' ? Number($('#sRemind').value) : profile.remindEvery,
       wakeHour:n('#sWake',profile.wakeHour), sleepHour:n('#sSleep',profile.sleepHour)};
