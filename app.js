@@ -500,7 +500,7 @@ function activityCard(date){
   const steps = Number(h.steps || 0);
   const at = h.updated_at ? new Date(h.updated_at) : null;
   return `<div class="card" id="cardActivity">
-    <div class="spread"><h3>Activity · Apple Health</h3><span class="row small muted">${at ? 'updated ' + z(at.getHours()) + ':' + z(at.getMinutes()) : ''}<a class="btn" href="shortcuts://run-shortcut?name=Cutline%20Health">Update now</a></span></div>
+    <div class="spread"><h3>Activity · Apple Health</h3><span class="row small muted">${at ? 'updated ' + z(at.getHours()) + ':' + z(at.getMinutes()) : ''}<button class="btn ghost" data-act="health-refresh" aria-label="Reload from server">↻</button><a class="btn" href="shortcuts://run-shortcut?name=Cutline%20Health">Update now</a></span></div>
     <div class="spread"><span class="big num">${steps.toLocaleString()}</span><span class="small muted num">/ ${STEP_GOAL.toLocaleString()} steps</span></div>
     <div class="bar"><i style="width:${Math.min(100, steps / STEP_GOAL * 100)}%"></i></div>
     <div class="small muted num">${h.distance_km != null ? Number(h.distance_km).toFixed(1) + ' km · ' : ''}${h.active_kcal != null ? Math.round(h.active_kcal) + ' active kcal (not added to your food budget)' : ''}${h.weight_kg ? ' · Health weight ' + Number(h.weight_kg).toFixed(1) + ' kg' : ''}</div>
@@ -740,6 +740,7 @@ document.addEventListener('click', async e => {
     if (r.error) { alertBox('Could not create a link code: ' + r.error.message + '. Run the latest supabase/schema.sql first.'); return; }
     healthToken = tok; saveHealthLocal(); render();
   }
+  if (act === 'health-refresh') { await pullHealth(); }
   if (act === 'signout') { await sb.auth.signOut(); }
   if (act === 'syncnow') { await flush(); await pull(); }
   if (act === 'showauth') { try { localStorage.removeItem('cut69localOnly'); } catch {} showAuth(true); }
@@ -918,7 +919,7 @@ async function pull(){
   pullHealth();
   if (!p.data && !d.data.length) {
     // brand-new account: upload whatever this device already has
-    markDirty('profile'); Object.keys(days).forEach(k => markDirty('d:'+k)); return;
+    markDirty('profile'); Object.keys(days).forEach(k => markDirty('d:'+k)); pullHealth(); return;
   }
   if (p.data && !dirty.has('profile')) profile = {...DEFAULT_PROFILE, ...p.data.data};
   const remote = {};
@@ -935,6 +936,7 @@ async function pullHealth(){
   if (!t.error) healthToken = t.data ? t.data.token : null;
   saveHealthLocal(); applyHealthWeights(); render();
 }
+setInterval(() => { if (uid && document.visibilityState === 'visible') pullHealth(); }, 30000);
 let channel = null;
 function listen(){
   if (channel) sb.removeChannel(channel);
