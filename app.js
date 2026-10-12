@@ -435,7 +435,7 @@ function renderToday(){
     <div class="spread"><h3>${v.rp.vest ? 'Ruck' : 'Recovery walk · no vest'}</h3><span class="num small muted">${d.ruckMin||0} / ${v.rp.min} min · ≈${Math.round((d.ruckMin||0) * ruckRate(v.t.w))} kcal burned</span></div>
     <div class="bar"><i style="width:${Math.min(100,(d.ruckMin||0)/v.rp.min*100)}%"></i></div>
     <div class="row">
-      ${d.ruckStart ? `<span class="timer" id="ruckClock">${running}:00</span><button class="btn primary" data-act="ruck-stop">Stop & log</button>`
+      ${d.ruckStart ? `<span class="timer" id="ruckClock">${elapsed(d.ruckStart)}</span><button class="btn primary" data-act="ruck-stop">Stop & log</button>`
                    : `<button class="btn primary" data-act="ruck-start">Start ${v.rp.vest ? 'ruck' : 'walk'} timer</button>`}
       <button class="btn" data-ruck="15">+15</button><button class="btn" data-ruck="30">+30</button><button class="btn" data-ruck="-15">−15</button>
     </div>
@@ -798,6 +798,8 @@ function startRest(s){
   tick();
 }
 function beep(){ if (!audioCtx) return; try { const o = audioCtx.createOscillator(), g = audioCtx.createGain(); o.frequency.value = 880; o.connect(g); g.connect(audioCtx.destination); g.gain.value = .15; o.start(); o.stop(audioCtx.currentTime + .35); } catch {} }
+// the timer is computed from the shared start time, so every device shows the same value
+function elapsed(start){ const s = Math.max(0, Math.floor((Date.now() - start) / 1000)); return `${Math.floor(s/60)}:${z(s%60)}`; }
 function tick(){
   const rc = $('#restClock');
   if (rc) { const left = Math.max(0, Math.ceil((restEnd - Date.now())/1000)); rc.textContent = `${Math.floor(left/60)}:${z(left%60)}`;
@@ -805,7 +807,7 @@ function tick(){
   const d = getDay(today()), clk = $('#ruckClock');
   if (clk && d.ruckStart) { const s = Math.floor((Date.now()-d.ruckStart)/1000); clk.textContent = `${Math.floor(s/60)}:${z(s%60)}`; }
 }
-setInterval(tick, 1000);
+setInterval(tick, 250);
 let lastDate = today();
 setInterval(() => { if (today() !== lastDate) { lastDate = today(); render(); } }, 60000);
 
