@@ -496,11 +496,11 @@ function renderTrain(){
 function activityCard(date){
   const h = health[date];
   if (!healthToken) return `<div class="card"><div class="spread"><h3>Activity</h3><button class="btn" data-goto="setup">Connect Apple Health</button></div><div class="small muted">Pull steps, distance, active calories and weight from your iPhone automatically.</div></div>`;
-  if (!h) return `<div class="card"><h3>Activity</h3><div class="small muted">No Apple Health data yet today. It arrives when the Cutline Health shortcut runs (automatically at the times you set, or tap it on your iPhone).</div></div>`;
+  if (!h) return `<div class="card" id="cardActivity"><div class="spread"><h3>Activity</h3><a class="btn" href="shortcuts://run-shortcut?name=Cutline%20Health">Update now</a></div><div class="small muted">No Apple Health data yet today. It arrives when the Cutline Health shortcut runs, automatically at the times you set or when you tap Update now on your iPhone.</div></div>`;
   const steps = Number(h.steps || 0);
   const at = h.updated_at ? new Date(h.updated_at) : null;
   return `<div class="card" id="cardActivity">
-    <div class="spread"><h3>Activity · Apple Health</h3><span class="small muted">${at ? 'updated ' + z(at.getHours()) + ':' + z(at.getMinutes()) : ''}</span></div>
+    <div class="spread"><h3>Activity · Apple Health</h3><span class="row small muted">${at ? 'updated ' + z(at.getHours()) + ':' + z(at.getMinutes()) : ''}<a class="btn" href="shortcuts://run-shortcut?name=Cutline%20Health">Update now</a></span></div>
     <div class="spread"><span class="big num">${steps.toLocaleString()}</span><span class="small muted num">/ ${STEP_GOAL.toLocaleString()} steps</span></div>
     <div class="bar"><i style="width:${Math.min(100, steps / STEP_GOAL * 100)}%"></i></div>
     <div class="small muted num">${h.distance_km != null ? Number(h.distance_km).toFixed(1) + ' km · ' : ''}${h.active_kcal != null ? Math.round(h.active_kcal) + ' active kcal (not added to your food budget)' : ''}${h.weight_kg ? ' · Health weight ' + Number(h.weight_kg).toFixed(1) + ' kg' : ''}</div>
