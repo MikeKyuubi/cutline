@@ -458,7 +458,7 @@ function renderToday(){
   </div>
 
   <div class="card">
-    <div class="spread"><h3>Eaten today</h3><button class="btn primary" data-goto="food">+ Add food</button></div>
+    <div class="spread"><h3>Eaten today</h3><span class="row"><button class="btn" data-act="snap" ${sample ? '' : 'disabled'}>Photo</button><button class="btn primary" data-goto="food">+ Add food</button></span></div>
     ${d.foods.length ? `<ul class="log">${d.foods.map((f,i) => `<li><span class="nm">${esc(f.name)}</span><span class="num small">${f.kcal} kcal · ${f.protein} g</span><button class="btn ghost" data-delfood="${i}" aria-label="Remove">✕</button></li>`).join('')}</ul>`
       : '<div class="muted small">Nothing logged yet. Tap Add food and log meals as you eat them.</div>'}
   </div>`;
@@ -566,6 +566,7 @@ function renderFood(){
       <input id="locIn" value="${esc(profile.location)}" placeholder="e.g. Makati near Ayala, or Kaohsiung Zuoying"></label>
     <div class="row"><button class="btn primary" data-act="suggest" ${sample ? '' : 'disabled'}>Suggest what to eat next</button></div>
     <div class="ai-out" id="suggestOut">${suggestHTML}</div>
+    <div class="row"><button class="btn primary" data-act="snap" ${sample ? '' : 'disabled'}>Take a photo of your meal</button><span class="small muted">Claude estimates it from the picture. Add notes below first if you like (e.g. "half portion", "no rice").</span></div>
     <label class="field"><span class="label">Or describe a meal to estimate its calories</span>
       <textarea id="mealIn" placeholder="e.g. carinderia: 1 cup rice, chicken adobo 2 pcs, a bit of pinakbet"></textarea></label>
     <div class="row"><button class="btn" data-act="estimate" ${sample ? '' : 'disabled'}>Estimate & log</button></div>
@@ -763,7 +764,8 @@ document.addEventListener('click', async e => {
   if (act === 'showauth') { try { localStorage.removeItem('cut69localOnly'); } catch {} showAuth(true); }
   if (act === 'clearkey') { try { localStorage.removeItem('cut69key'); } catch {} sample = null; render(); }
   if (act === 'estimate') estimate(b);
-  if (act === 'estlog') { estItems.forEach(x => ensureDay(date).foods.push({...x, at:Date.now()})); estItems = []; estHTML = '<div class="small muted">Logged.</div>'; const m = $('#mealIn'); if (m) m.value = ''; saveDay(date); }
+  if (act === 'snap') { photoInput().click(); return; }
+  if (act === 'estlog') { const f = Number(b.dataset.frac || 1); estItems.forEach(x => ensureDay(date).foods.push({name: f < 1 ? x.name + ' (half)' : x.name, kcal: Math.round(x.kcal * f), protein: Math.round(x.protein * f), at:Date.now()})); estItems = []; estHTML = '<div class="small muted">Logged.</div>'; const m = $('#mealIn'); if (m) m.value = ''; saveDay(date); }
 });
 document.addEventListener('submit', e => {
   e.preventDefault();
@@ -837,7 +839,7 @@ const MODELS = {
 function getKey(){ try { return localStorage.getItem('cut69key') || ''; } catch { return ''; } }
 function getModel(){ let m = ''; try { m = localStorage.getItem('cut69model') || ''; } catch {} return MODELS[m] ? m : 'claude-opus-5-5'; }
 let Anthropic = null;
-async function aiJson(prompt, {modelTier} = {}){
+async function aiJson(prompt, {modelTier, image} = {}){
   const key = getKey(); if (!key) throw {code:'no_key'};
   if (!Anthropic) Anthropic = (await import('https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.128.0/+esm')).default;
   const client = new Anthropic({apiKey: key, dangerouslyAllowBrowser: true});
@@ -845,7 +847,9 @@ async function aiJson(prompt, {modelTier} = {}){
   const params = {
     model, max_tokens: 16000,
     output_config: {effort: modelTier === 'quick' ? 'low' : 'medium'},
-    messages: [{role:'user', content: prompt}],
+    messages: [{role:'user', content: image
+      ? [{type:'image', source:{type:'base64', media_type:'image/jpeg', data:image}}, {type:'text', text:prompt}]
+      : prompt}],
   };
   // on a safety decline, the API retries on a fallback model instead of failing
   const res = MODELS[model].fallback
@@ -910,9 +914,66 @@ async function estimate(btn){
     estItems = arr.map(x => ({name:String(x.name).slice(0,120), kcal:Math.round(+x.kcal), protein:Math.round(+x.protein||0)}));
     const tot = arr.reduce((a,x) => a + Math.round(+x.kcal), 0), pr = arr.reduce((a,x) => a + Math.round(+x.protein||0), 0);
     estHTML = `<ul class="log">${arr.map(x => `<li><span class="nm">${esc(x.name)}</span><span class="num small">${Math.round(+x.kcal)} kcal · ${Math.round(+x.protein||0)} g</span><span></span></li>`).join('')}</ul>
-      <div class="row"><b class="num">${tot} kcal · ${pr} g protein</b><button class="btn primary" data-act="estlog">Log all</button></div>`;
+      <div class="row"><b class="num">${tot} kcal · ${pr} g protein</b><button class="btn primary" data-act="estlog">Log all</button><button class="btn" data-act="estlog" data-frac="0.5">Log half</button></div>`;
   } catch (e) { estHTML = `<div class="small" style="color:var(--bad)">${esc(aiError(e))}</div>`; }
   finally { const o = $('#estOut'); if (o) o.innerHTML = estHTML; const bb = document.querySelector('[data-act="estimate"]'); if (bb) bb.disabled = false; }
+}
+
+// one hidden camera input shared by every Photo button (opens the camera directly on iPhone)
+let _photoInput = null;
+function photoInput(){
+  if (_photoInput) return _photoInput;
+  const i = document.createElement('input');
+  i.type = 'file'; i.accept = 'image/*'; i.setAttribute('capture', 'environment');
+  i.style.cssText = 'position:fixed;left:-9999px;width:1px;height:1px;opacity:0';
+  i.addEventListener('change', () => { const f = i.files && i.files[0]; i.value = ''; if (f) photoEstimate(f); });
+  document.body.appendChild(i);
+  return (_photoInput = i);
+}
+// shrink to ~1.2 MP JPEG so the request stays small and cheap
+function shrinkPhoto(file){
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, 1280 / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      const dataUrl = c.toDataURL('image/jpeg', 0.8);
+      resolve({dataUrl, b64: dataUrl.split(',')[1]});
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject({code:'bad_image'}); };
+    img.src = url;
+  });
+}
+async function photoEstimate(file){
+  if (!sample) return;
+  activeTab = 'food'; showTab();
+  const notes = (($('#mealIn') || {}).value || '').trim();
+  let shot;
+  try { shot = await shrinkPhoto(file); } catch { estHTML = '<div class="small" style="color:var(--bad)">Could not read that photo. Try again.</div>'; render(); return; }
+  const thumb = `<img src="${shot.dataUrl}" alt="Your meal" style="max-height:160px;border-radius:8px;justify-self:start">`;
+  estHTML = thumb + '<div class="muted small">Looking at your meal… this can take up to a minute.</div>';
+  render();
+  const o0 = $('#estOut'); if (o0) o0.scrollIntoView({behavior:'smooth', block:'center'});
+  try {
+    const res = await sample.json(
+      `This photo shows a meal someone is about to eat in ${profile.location || REGION_LABEL[profile.region]}. Identify each distinct food item and estimate its calories and protein for the portion visible on the plate. ` +
+      `Judge size against the plate, utensils and hands. Account for cooking oil, breading, sauces and glazes. If unsure, round calories up slightly rather than down.` +
+      (notes ? `\nThe person added this note: ${notes.slice(0, 400)}` : '') +
+      `\nReply with only a JSON array, one object per distinct item: {"name": string (short, include the portion, e.g. "Pancit canton, ~1.5 cups"), "kcal": number, "protein": number}.`,
+      {modelTier:'default', image: shot.b64});
+    const arr = Array.isArray(res) ? res.filter(x => x && x.name && isFinite(x.kcal)).slice(0, 12) : [];
+    if (!arr.length) { estHTML = thumb + '<div class="muted small">Could not recognise food in that photo. Try a clearer shot from above.</div>'; return; }
+    estItems = arr.map(x => ({name:String(x.name).slice(0,120), kcal:Math.round(+x.kcal), protein:Math.round(+x.protein||0)}));
+    const tot = estItems.reduce((a,x) => a + x.kcal, 0), pr = estItems.reduce((a,x) => a + x.protein, 0);
+    estHTML = thumb + `<ul class="log">${estItems.map(x => `<li><span class="nm">${esc(x.name)}</span><span class="num small">${x.kcal} kcal · ${x.protein} g</span><span></span></li>`).join('')}</ul>
+      <div class="row"><b class="num">${tot} kcal · ${pr} g protein</b><button class="btn primary" data-act="estlog">Log all</button><button class="btn" data-act="estlog" data-frac="0.5">Log half</button></div>
+      <div class="note">A photo can't show hidden oil or exact portions. Treat this as a close guess.</div>`;
+    const m = $('#mealIn'); if (m) m.value = '';
+  } catch (e) { estHTML = thumb + `<div class="small" style="color:var(--bad)">${esc(aiError(e))}</div>`; }
+  finally { const o = $('#estOut'); if (o) o.innerHTML = estHTML; }
 }
 
 /* ---------- auth + boot ---------- */
