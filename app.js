@@ -28,53 +28,71 @@ const ACTIVITY = {1.3:'Desk / hotel, little walking', 1.4:'Light (some walking)'
 // kcal and protein are typical estimates. tag: go = fits a cut, limit = OK occasionally, avoid = blows the budget
 const FOODS = {
   ph: [
-    ['ProMatrix 7 shake, 1 scoop in water',130,25,'go'],
-    ['ProMatrix 7, ½ scoop in coffee',65,13,'go'],
-    ['Grilled chicken breast (150 g)',250,45,'go'],
-    ['Chicken inasal, paa — skin off',290,32,'go'],
-    ['Inihaw na bangus, half',260,30,'go'],
-    ['Sinigang na hipon (bowl)',180,20,'go'],
-    ['Tinola (bowl, 2 pcs chicken)',230,26,'go'],
-    ['Boiled eggs ×2 (7-Eleven)',140,12,'go'],
-    ['Canned tuna in water (155 g)',150,30,'go'],
-    ["Young's Town sardines in tomato sauce, whole can",110,16,'go'],
-    ["Young's Town sardines in tomato sauce, half can",55,8,'go'],
-    ['Century Tuna Hot & Spicy, whole can (180 g)',320,21,'limit'],
-    ['Century Tuna Hot & Spicy, oil drained, whole can',260,21,'limit'],
-    ['Century Tuna Hot & Spicy, ⅓ can (56 g)',107,7,'limit'],
-    ['Plain Greek yogurt cup (~150 g)',130,14,'go'],
-    ['Roast chicken, ¼ (skin off)',220,30,'go'],
-    ['Canned pink salmon (213 g can)',300,42,'go'],
-    ['Instant oats 40 g + 1 scoop ProMatrix',280,30,'go'],
-    ['Canned chickpeas, drained (1 cup)',210,11,'go'],
-    ['Cucumber + cherry tomatoes (bowl)',40,2,'go'],
-    ['Sardines in tomato sauce (155 g can)',200,20,'go'],
-    ['Protein bar (check: 15 g+ protein)',200,20,'go'],
-    ['Beef jerky (30 g)',90,12,'go'],
-    ['Salted egg (itlog na maalat)',90,7,'go'],
-    ['Unsweetened soy milk 250 ml',90,8,'go'],
-    ['Roasted peanuts, small handful (30 g)',170,7,'limit'],
-    ['Ginisang monggo (bowl)',250,15,'go'],
-    ['Pinakbet (cup)',160,5,'go'],
-    ['Half cup rice',100,2,'go'],
-    ['1 cup rice',205,4,'limit'],
-    ['Banana, lakatan',100,1,'go'],
-    ['Low-fat milk 250 ml',120,8,'go'],
-    ['Chicken adobo (2 pcs)',380,30,'limit'],
-    ['Pork menudo (carinderia serving)',380,20,'limit'],
-    ['Beef kaldereta (carinderia serving)',430,24,'limit'],
-    ['Grilled chicken liver, 3 skewers',180,24,'go'],
-    ['Pandesal ×2',180,6,'limit'],
-    ['Taho, small',150,6,'limit'],
-    ['Mang Inasal PM1 + 1 rice',600,34,'limit'],
-    ['Jollibee 1-pc Chickenjoy + rice',560,30,'limit'],
-    ['Starbucks matcha latte, tall, nonfat milk',150,9,'limit'],
-    ['Starbucks matcha latte, grande, 2% milk',240,12,'limit'],
-    ['Starbucks matcha Frappuccino, grande',420,6,'avoid'],
-    ['7-Eleven grilled liempo + kangkong meal',839,16,'avoid'],
-    ['Pork sisig (serving)',550,25,'avoid'],
-    ['Lechon kawali (150 g)',650,28,'avoid'],
-    ['Extra rice (unli-rice round)',205,4,'avoid'],
+    // breakfast (K = needs only your kettle)
+    ['Protein oats: instant oats 40 g + 1 scoop ProMatrix (K)',280,30,'go','b'],
+    ['Oats 40 g + banana (K)',250,6,'go','b'],
+    ['2 boiled eggs + 1 pandesal',230,15,'go','b'],
+    ['Tuna (in water) pandesal ×2',330,34,'go','bl'],
+    ['Greek yogurt + banana',230,15,'go','bs'],
+    ['Protein coffee: ½ scoop ProMatrix in coffee',65,13,'go','bs'],
+    ['Tapsilog with half rice',550,30,'limit','bl'],
+    ['Longsilog / tocilog with full rice',750,20,'avoid','b'],
+    ['Pandesal ×2',180,6,'limit','bs'],
+    ['Taho, small',150,6,'limit','bs'],
+    // lunch / dinner meals
+    ['Sardines + 2 eggs + half cup rice',350,28,'go','ld'],
+    ['Roast chicken ¼ (skin off) + cucumber & tomato + half cup rice',360,32,'go','ld'],
+    ['Tuna salad: tuna in water + chickpeas + cucumber',400,43,'go','ld'],
+    ['Pritong isda + pinakbet + half cup rice',510,33,'go','ld'],
+    ['Inihaw na bangus, half + half cup rice',360,32,'go','ld'],
+    ['Chicken inasal, paa — skin off + half cup rice',390,34,'go','ld'],
+    ['Grilled chicken breast (150 g)',250,45,'go','ld'],
+    ['Roast chicken, ¼ (skin off)',220,30,'go','ld'],
+    ['Canned pink salmon (213 g can)',300,42,'go','ld'],
+    ['Pritong isda, 1 medium (not battered)',250,28,'go','ld'],
+    ['Sinigang na hipon (bowl)',180,20,'go','ld'],
+    ['Tinola (bowl, 2 pcs chicken)',230,26,'go','ld'],
+    ['Grilled chicken liver, 3 skewers',180,24,'go','lds'],
+    ['Ginisang monggo (bowl)',250,15,'go','ld'],
+    ['Pinakbet (cup)',160,5,'go','ld'],
+    ['Chicken adobo (2 pcs)',380,30,'limit','ld'],
+    ['Pork menudo (carinderia serving)',380,20,'limit','ld'],
+    ['Beef kaldereta (carinderia serving)',430,24,'limit','ld'],
+    ['Mang Inasal PM1 + 1 rice',600,34,'limit','ld'],
+    ['Jollibee 1-pc Chickenjoy + rice',560,30,'limit','ld'],
+    ['Pancit canton + 2 pcs glazed fried chicken',1025,50,'avoid','ld'],
+    ['7-Eleven grilled liempo + kangkong meal',839,16,'avoid','ld'],
+    ['Pork sisig (serving)',550,25,'avoid','ld'],
+    ['Lechon kawali (150 g)',650,28,'avoid','ld'],
+    // canned & sides
+    ['Canned tuna in water (155 g)',150,30,'go','lds'],
+    ["Young's Town sardines in tomato sauce, whole can",110,16,'go','lds'],
+    ["Young's Town sardines in tomato sauce, half can",55,8,'go','s'],
+    ['Century Tuna Hot & Spicy, oil drained, whole can',260,21,'limit','ld'],
+    ['Century Tuna Hot & Spicy, whole can (180 g)',320,21,'limit','ld'],
+    ['Canned chickpeas, drained (1 cup)',210,11,'go','ld'],
+    ['Cucumber + cherry tomatoes (bowl)',40,2,'go','lds'],
+    ['Half cup rice',100,2,'go','ld'],
+    ['1 cup rice',205,4,'limit','ld'],
+    ['Extra rice (unli-rice round)',205,4,'avoid','ld'],
+    ['Instant pancit canton, 1 pack (K)',300,6,'avoid','lds'],
+    ['Cup noodles (K)',300,7,'avoid','lds'],
+    // snacks
+    ['ProMatrix 7 shake, 1 scoop in water',130,25,'go','s'],
+    ['Boiled eggs ×2',140,12,'go','sb'],
+    ['Salted egg (itlog na maalat)',90,7,'go','s'],
+    ['Beef jerky (30 g)',90,12,'go','s'],
+    ['Protein bar (check: 15 g+ protein)',200,20,'go','s'],
+    ['Plain Greek yogurt cup (~150 g)',130,14,'go','sb'],
+    ['Low-fat milk 250 ml',120,8,'go','sb'],
+    ['Unsweetened soy milk 250 ml',90,8,'go','sb'],
+    ['Banana, lakatan',100,1,'go','sb'],
+    ['Apple or guava',80,1,'go','s'],
+    ['Roasted peanuts, small handful (30 g)',170,7,'limit','s'],
+    ['Skyflakes, 1 pack',130,2,'limit','s'],
+    ['Starbucks matcha latte, tall, nonfat milk',150,9,'limit','s'],
+    ['Starbucks matcha latte, grande, 2% milk',240,12,'limit','s'],
+    ['Starbucks matcha Frappuccino, grande',420,6,'avoid','s'],
   ],
   tw: [
     ['7-Eleven sous-vide chicken breast',120,24,'go'],
@@ -547,16 +565,53 @@ function exCard(id, d, checkable){
 }
 
 let foodQuery = '';
+let foodMeal = null; // null = follow the clock
+const MEALS = [['b','Breakfast'],['l','Lunch'],['s','Snack'],['d','Dinner'],['all','All']];
+function mealNow(){ const h = new Date().getHours(); return h < 10 ? 'b' : h < 15 ? 'l' : h < 17 ? 's' : 'd'; }
+// items from other regions have no meal field: treat them as fitting any meal
+const mealsOf = f => f[4] || 'blsd';
+// share of the day's food each meal usually takes; used to size "best picks" to the meal you are on
+const MEAL_SHARE = {b:0.25, l:0.35, s:0.1, d:0.3};
+function bestPicks(meal, left, pLeft){
+  if (left < 60) return [];
+  const order = ['b','l','s','d'], idx = order.indexOf(meal);
+  const restShare = order.slice(idx).reduce((a,m) => a + MEAL_SHARE[m], 0);
+  const share = MEAL_SHARE[meal] / restShare;
+  const budget = Math.max(120, Math.min(left, left * share, 700));
+  const pNeed = Math.max(10, Math.min(50, pLeft * share));
+  return (FOODS[profile.region] || FOODS.ph)
+    .filter(f => mealsOf(f).includes(meal) && f[3] !== 'avoid' && f[1] <= left)
+    .map(f => {
+      const density = Math.min(20, f[2] / Math.max(f[1], 1) * 100) / 20; // protein per calorie, 0..1
+      const fit = 1 - Math.min(1, Math.abs(f[1] - budget) / budget);     // close to this meal's share
+      const cover = Math.min(f[2], pNeed) / pNeed;                         // covers this meal's protein
+      const score = fit * 4 + density * 2 + (pLeft > 5 ? cover * 2 : 0) + (f[3] === 'go' ? 0.5 : 0);
+      return {f, score, budget};
+    })
+    .sort((a, b) => b.score - a.score).slice(0, 3);
+}
 function renderFood(){
   const date = today(), v = verdict(date), left = v.t.kcal - v.tot.total, pLeft = Math.max(0, v.t.protein - v.tot.protein);
-  const list = (FOODS[profile.region] || FOODS.ph).filter(f => f[0].toLowerCase().includes(foodQuery.toLowerCase()));
+  const meal = foodMeal || mealNow();
+  const list = (FOODS[profile.region] || FOODS.ph).filter(f => (meal === 'all' || mealsOf(f).includes(meal)) && f[0].toLowerCase().includes(foodQuery.toLowerCase()));
+  const pickMeal = meal === 'all' ? mealNow() : meal;
+  const picks = bestPicks(pickMeal, left, pLeft);
+  const mealName = Object.fromEntries(MEALS)[pickMeal];
   $('#tab-food').innerHTML = `
   <div class="card">
-    <div class="spread"><h2>Add food</h2><span class="num small">${left} kcal · ${pLeft} g protein left</span></div>
+    <div class="spread"><h2>Best picks · ${mealName}</h2><span class="num small">${left} kcal · ${pLeft} g protein left</span></div>
+    ${picks.length ? `<div class="foods">${picks.map((x, i) => `<button class="food" data-addfood="${esc(x.f[0])}|${x.f[1]}|${x.f[2]}" ${i === 0 ? 'style="border-color:var(--accent)"' : ''}><span class="fn">${i === 0 ? '<span class="tag go">best</span> ' : ''}${esc(x.f[0])}</span><span class="fk">${x.f[1]}</span><span class="fp">${x.f[2]} g protein · leaves ${left - x.f[1]} kcal, ${Math.max(0, pLeft - x.f[2])} g protein to go</span></button>`).join('')}</div>
+    <div class="note">Chosen for the most protein per calorie that fits about ${Math.round(picks[0].budget)} kcal for this meal, given what you've eaten today.</div>`
+    : `<div class="coach ${left < 60 ? 'bad' : ''}">${left < 60 ? 'You are at your limit for today. Water, black coffee or plain tea only.' : 'Nothing in the list fits what you have left. Try the Snack tab, or a custom entry.'}</div>`}
+  </div>
+
+  <div class="card">
+    <div class="spread"><h2>Add food</h2></div>
+    <div class="row" role="tablist">${MEALS.map(([k, n]) => `<button class="btn ${k === meal ? 'primary' : ''}" data-meal="${k}" role="tab" aria-selected="${k === meal}">${n}</button>`).join('')}</div>
     <div class="row"><select id="regionSel" style="width:auto">${Object.keys(FOODS).map(k => `<option value="${k}" ${k===profile.region?'selected':''}>${esc(REGION_LABEL[k])}</option>`).join('')}</select>
       <input id="foodSearch" type="search" placeholder="Filter…" value="${esc(foodQuery)}" style="flex:1"></div>
     <div class="foods">${list.map((f,i) => `<button class="food" data-addfood="${esc(f[0])}|${f[1]}|${f[2]}"><span class="fn">${esc(f[0])}</span><span class="fk">${f[1]}</span><span class="fp">${f[2]} g protein · <span class="tag ${f[3]}">${f[3]}</span>${f[1] > left ? ' · <b style="color:var(--bad)">over your remaining budget</b>' : ''}</span></button>`).join('') || '<div class="muted small">No match.</div>'}</div>
-    <div class="note">Values are typical estimates. Tap to log one serving.</div>
+    <div class="note">Values are typical estimates. Tap to log one serving. (K) = make it with your kettle.</div>
   </div>
 
   <div class="card">
@@ -748,6 +803,7 @@ document.addEventListener('click', async e => {
   if (b.dataset.water) { const d = ensureDay(date), n = Number(b.dataset.water); d.water = Math.max(0, (d.water||0) + n); if (n > 0) d.waterAt = Date.now(); saveDay(date); return; }
   if (b.dataset.ruck) { const d = ensureDay(date); d.ruckMin = Math.max(0, (d.ruckMin||0) + Number(b.dataset.ruck)); saveDay(date); return; }
   if (b.dataset.delfood != null) { const d = ensureDay(date); d.foods.splice(+b.dataset.delfood, 1); saveDay(date); return; }
+  if (b.dataset.meal) { foodMeal = b.dataset.meal; renderFood(); return; }
   if (b.dataset.addfood) { const [name,kcal,protein] = b.dataset.addfood.split('|'); logFood(name, +kcal, +protein); return; }
   if (b.dataset.rest != null) { startRest(+b.dataset.rest); return; }
   const act = b.dataset.act;
