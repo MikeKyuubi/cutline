@@ -376,6 +376,125 @@ function avgWeight(date, n=7){
   return ws.length ? ws.reduce((a,b)=>a+b,0)/ws.length : null;
 }
 
+
+/* ---------- daily insights (computed on the device, no API cost) ---------- */
+const fmtKg = x => (x > 0 ? '+' : x < 0 ? '−' : '±') + Math.abs(x).toFixed(1);
+const niceDate = s => { const d = parseYmd(s); return d.toLocaleDateString(undefined, {month:'short', day:'numeric'}); };
+function weightTrend(){
+  // least-squares slope over the last 14 days of weigh-ins, kg per day
+  const t = today();
+  const pts = [...Array(14)].map((_, i) => addDays(t, -i)).filter(d => getDay(d).weight).map(d => [-diffDays(d, t), getDay(d).weight]);
+  // early on, water swings swamp fat loss: wait for 6+ weigh-ins spread over 9+ days
+  if (pts.length < 6 || Math.max(...pts.map(p => p[0])) - Math.min(...pts.map(p => p[0])) < 9) return null;
+  const n = pts.length, mx = pts.reduce((a, p) => a + p[0], 0) / n, my = pts.reduce((a, p) => a + p[1], 0) / n;
+  const num = pts.reduce((a, p) => a + (p[0] - mx) * (p[1] - my), 0), den = pts.reduce((a, p) => a + (p[0] - mx) ** 2, 0);
+  return den ? {slope: num / den, n} : null;
+}
+function insights(){
+  const t = today(), y = addDays(t, -1), out = [];
+  const wT = getDay(t).weight, wY = getDay(y).weight;
+  const avg = avgWeight(t), prevAvg = avgWeight(addDays(t, -7));
+  const readings = [...Array(7)].map((_, i) => addDays(t, -i)).filter(d => getDay(d).weight).length;
+
+  // 1. weight
+  if (wT && wY) {
+    const dlt = wT - wY, yd = getDay(y), yv = verdict(y);
+    const heavy = yd.foods.some(f => f.kcal >= 700) || yd.foods.some(f => /fried|pancit|liempo|sisig|noodle|canton|lechon/i.test(f.name));
+    let why = '';
+    if (dlt >= 0.3 && (heavy || (yd.foods.length && yv.tot.total > yv.t.kcal))) why = ' Most likely water from yesterday\'s salty or heavy meal, not fat. It usually clears in 1–2 days.';
+    else if (dlt > -0.05 && dlt < 0.05) why = ' Flat days are normal; fat loss (~0.1 kg/day) is smaller than daily water swings.';
+    out.push({tone: dlt <= 0 ? 'ok' : 'warn', icon: 'Weight', text: `${wT.toFixed(1)} kg today (${fmtKg(dlt)} vs yesterday).${why}`});
+  } else if (!wT) out.push({tone: 'warn', icon: 'Weight', text: 'No weigh-in yet today. Weigh after the toilet, before food or coffee.'});
+
+  if (avg && readings >= 3) {
+    let txt = `7-day average ${avg.toFixed(1)} kg from ${readings} weigh-in${readings > 1 ? 's' : ''}.`;
+    let tone = '';
+    if (prevAvg) { const d = avg - prevAvg; txt += ` ${fmtKg(d)} kg vs the week before.`; tone = d <= -0.3 ? 'ok' : d >= 0.2 ? 'bad' : 'warn'; }
+    const gap = avg - planWeight(t);
+    txt += gap > 0.3 ? ` ${gap.toFixed(1)} kg behind the plan line.` : gap < -0.3 ? ` ${(-gap).toFixed(1)} kg ahead of the plan line.` : ' On the plan line.';
+    out.push({tone, icon: 'Trend', text: txt});
+  }
+  const tr = weightTrend();
+  if (tr) {
+    const perWeek = tr.slope * 7;
+    if (perWeek < -0.05) {
+      const daysLeft = Math.ceil(((avg || latestWeight(t)) - profile.goalKg) / -tr.slope);
+      out.push({tone: perWeek <= -0.5 ? 'ok' : 'warn', icon: 'Pace', text: `Losing ${(-perWeek).toFixed(1)} kg/week (target 0.7). At this pace you reach ${profile.goalKg} kg around ${niceDate(addDays(t, Math.max(0, daysLeft)))}.`});
+    } else out.push({tone: 'bad', icon: 'Pace', text: `No downward trend over the last ${tr.n} weigh-ins yet. If this holds for 2 full weeks, cut 150 kcal in Setup.`});
+  } else out.push({tone: '', icon: 'Pace', text: 'Your real pace and goal date appear after about 10 days of weigh-ins. Before that, water swings are bigger than fat loss, so any estimate would mislead you.'});
+
+  // 2. yesterday's report card
+  if (y >= profile.startDate) {
+    const v = verdict(y), d = getDay(y), bits = [];
+    if (d.foods.length) bits.push(`${v.tot.total.toLocaleString()}/${v.t.kcal.toLocaleString()} kcal ${v.tot.total <= v.t.kcal + 50 ? '✓' : '✕'}`);
+    else bits.push('food not logged ✕');
+    bits.push(`protein ${v.tot.protein}/${v.t.protein} g ${v.tot.protein >= v.t.protein * 0.85 ? '✓' : '✕'}`);
+    bits.push(`ruck ${d.ruckMin || 0}/${v.rp.min} min ${(d.ruckMin || 0) >= v.rp.min ? '✓' : '✕'}`);
+    if (v.ls) bits.push(`lift ${v.items[3].s === 'ok' ? '✓' : '✕'}`);
+    bits.push(`water ${((d.water || 0) / 1000).toFixed(1)}/${(waterGoal(y) / 1000).toFixed(1)} L ${(d.water || 0) >= waterGoal(y) ? '✓' : '✕'}`);
+    out.push({tone: v.passed ? 'ok' : v.items.filter(i => i.s === 'bad').length >= 3 ? 'bad' : 'warn', icon: 'Yesterday', text: bits.join(' · ')});
+  }
+
+  // 3. the last 7 completed days
+  const past = [...Array(7)].map((_, i) => addDays(t, -1 - i)).filter(d => d >= profile.startDate);
+  let focus = null;
+  if (past.length) {
+    const vs = past.map(d => ({d, v: verdict(d), day: getDay(d)}));
+    const fed = vs.filter(x => x.day.foods.length);
+    const proteinHits = vs.filter(x => x.v.tot.protein >= x.v.t.protein * 0.85).length;
+    const kcalOver = fed.filter(x => x.v.tot.total > x.v.t.kcal + 50).length;
+    const ruckDone = vs.reduce((a, x) => a + (x.day.ruckMin || 0), 0), ruckPlan = vs.reduce((a, x) => a + ruckBase(x.d).min, 0);
+    const liftPlan = vs.filter(x => x.v.ls).length, liftDone = vs.filter(x => x.v.ls && x.v.items[3].s === 'ok').length;
+    const waterHits = vs.filter(x => (x.day.water || 0) >= waterGoal(x.d)).length;
+    const avoid = vs.flatMap(x => x.day.foods).filter(f => f.kcal >= 700);
+    const avgKcal = fed.length ? Math.round(fed.reduce((a, x) => a + x.v.tot.total, 0) / fed.length) : null;
+    const n = past.length;
+    out.push({tone: '', icon: `Last ${n} day${n > 1 ? 's' : ''}`, text:
+      `${avgKcal ? `avg ${avgKcal.toLocaleString()} kcal/day · ` : ''}protein hit ${proteinHits}/${n} · over calories ${kcalOver}/${fed.length || 0} · ruck ${ruckDone}/${ruckPlan} min · lifts ${liftDone}/${liftPlan} · water hit ${waterHits}/${n}` +
+      (avoid.length ? ` · ${avoid.length} meal${avoid.length > 1 ? 's' : ''} over 700 kcal` : '')});
+
+    // 4. one focus for today: the biggest gap
+    const gaps = [
+      {k: 'protein', miss: 1 - proteinHits / n, text: 'Protein is your weakest habit. Start the day with protein oats or tuna pandesal, and keep a scoop of ProMatrix for the evening.'},
+      {k: 'ruck', miss: ruckPlan ? 1 - Math.min(1, ruckDone / ruckPlan) : 0, text: `You've done ${ruckDone} of ${ruckPlan} planned ruck minutes. Do today's ruck before dinner, or split it: stairs at lunch, walk after dinner.`},
+      {k: 'kcal', miss: fed.length ? kcalOver / fed.length : 0, text: 'Calories went over on several days. Log meals before eating them, and swap one fried or noodle meal for a grilled one.'},
+      {k: 'lift', miss: liftPlan ? 1 - liftDone / liftPlan : 0, text: 'Missed dumbbell sessions. Lifting is what keeps the weight you lose as fat, not muscle. Do it before the ruck.'},
+      {k: 'water', miss: 1 - waterHits / n, text: 'Water goal is often missed. Fill your bottle twice before lunch and turn on drink reminders.'},
+      {k: 'log', miss: 1 - fed.length / n, text: 'Some days have no food logged. Unlogged days hide what is slowing you down. Log as you eat, even rough guesses.'},
+    ].sort((a, b) => b.miss - a.miss);
+    if (gaps[0].miss >= 0.25) focus = gaps[0].text;
+    else focus = 'Everything is on track this week. Same again today.';
+  }
+  return {items: out, focus};
+}
+function insightsHTML(limit){
+  const {items, focus} = insights();
+  const shown = limit ? items.slice(0, limit) : items;
+  return `<ul class="orders">${shown.map(i => `<li style="grid-template-columns:auto 1fr"><span class="tag ${i.tone === 'ok' ? 'go' : i.tone === 'bad' ? 'avoid' : i.tone === 'warn' ? 'limit' : ''}">${esc(i.icon)}</span><span class="small">${esc(i.text)}</span></li>`).join('')}</ul>
+    ${focus ? `<div class="coach">${esc('Focus today: ' + focus)}</div>` : ''}`;
+}
+let reviewHTML = '';
+async function weeklyReview(btn){
+  if (!sample) return;
+  const t = today();
+  const rows = [...Array(14)].map((_, i) => addDays(t, -i)).filter(d => d >= profile.startDate).reverse().map(d => {
+    const v = verdict(d), x = getDay(d);
+    return `${d}: weight ${x.weight ?? '-'} kg, ${x.foods.length ? v.tot.total : '-'}/${v.t.kcal} kcal, protein ${v.tot.protein}/${v.t.protein} g, ruck ${x.ruckMin || 0}/${v.rp.min} min, lift ${v.ls ? (v.items[3].s === 'ok' ? 'done' : 'missed') : 'rest'}, water ${x.water || 0} ml, foods: ${x.foods.map(f => f.name + ' ' + f.kcal).join('; ') || '-'}`;
+  }).join('\n');
+  btn.disabled = true; reviewHTML = '<div class="muted small">Reviewing your last two weeks…</div>'; renderProgress();
+  try {
+    const res = await sample.json(
+      `You are a strict but encouraging fat-loss coach. Client: ${profile.sex === 'f' ? 'woman' : 'man'}, ${profile.heightCm} cm, goal ${profile.goalKg} kg, eats in ${profile.location || REGION_LABEL[profile.region]}, trains in a hotel with a ${profile.dbKg || 15} kg dumbbell and ${profile.vestKg} kg vest. Keeps 3 coffees a day (non-negotiable).\n` +
+      `Their daily log, oldest first:\n${rows}\n\n` +
+      `Give a short review: what is working, the 2 biggest problems with evidence from the log, and 3 specific actions for this week (name real foods they can buy). Be direct, no fluff, under 180 words total.\n` +
+      `Reply with only JSON: {"working": string, "problems": [string, string], "actions": [string, string, string]}`, {modelTier: 'default'});
+    reviewHTML = `<div class="small"><b>Working:</b> ${esc(res.working || '')}</div>
+      <div class="small"><b>Problems:</b><ul style="margin:4px 0;padding-left:18px">${(res.problems || []).map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>
+      <div class="small"><b>This week:</b><ol style="margin:4px 0;padding-left:18px">${(res.actions || []).map(x => `<li>${esc(x)}</li>`).join('')}</ol></div>`;
+  } catch (e) { reviewHTML = `<div class="small" style="color:var(--bad)">${esc(aiError(e))}</div>`; }
+  finally { renderProgress(); }
+}
+
 /* ---------- render ---------- */
 const MARK = {ok:'✓', bad:'✕', open:''};
 let suggestHTML = '', estHTML = '', estItems = [], setupDirty = false;
@@ -433,6 +552,11 @@ function renderToday(){
     ${v.rp.why.length ? `<div class="small" style="color:var(--bad)">${v.rp.why.map(esc).join(' · ')}</div>` : ''}
     <div class="coach ${ctone}">${esc(cline)}</div>
     <div class="small muted">Streak: <b class="num">${streak()}</b> day(s) fully on plan.</div>
+  </div>
+
+  <div class="card">
+    <div class="spread"><h3>Insights</h3><button class="btn ghost" data-goto="progress">All insights ›</button></div>
+    ${insightsHTML(3)}
   </div>
 
   <div class="grid2">
@@ -661,6 +785,12 @@ function renderProgress(){
     <div class="small muted">Dashed line: the plan, 1 kg every 10 days, reaching ${profile.goalKg} kg around ${eta}. Dots: daily weigh-ins. Solid line: 7-day average.</div>
   </div>
   <div class="card">
+    <h3>Insights</h3>
+    ${insightsHTML()}
+    <div class="row"><button class="btn" data-act="review" ${sample ? '' : 'disabled'}>Weekly review from Claude</button><span class="small muted">Reads your last 14 days. About US$0.01–0.03.</span></div>
+    ${reviewHTML ? `<div class="ai-out">${reviewHTML}</div>` : ''}
+  </div>
+  <div class="card">
     <h3>Why these numbers</h3>
     <div class="small">Maintenance at ${t.w.toFixed(1)} kg, ${profile.heightCm} cm, age ${profile.age}: about <b class="num">${t.maint}</b> kcal/day. You eat <b class="num">${t.kcal}</b> (500 under${profile.adjust ? `, ${profile.adjust} adjustment` : ''}) and the ${ruckBase(date).min}-min ruck burns about <b class="num">${Math.round(ruckBase(date).min*ruckRate(t.w))}</b> more. Total deficit ≈ <b class="num">${t.maint - t.kcal + Math.round(ruckBase(date).min*ruckRate(t.w))}</b> kcal/day. One kg of fat is about 7,700 kcal, so that is roughly 1 kg every <b class="num">${(7700/(t.maint - t.kcal + ruckBase(date).min*ruckRate(t.w))).toFixed(1)}</b> days. Protein ${t.protein} g/day keeps the weight you lose as fat, not muscle.</div>
   </div>
@@ -813,6 +943,7 @@ document.addEventListener('click', async e => {
   if (act === 'ruck-start') { ensureDay(date).ruckStart = Date.now(); saveDay(date); }
   if (act === 'ruck-stop') { const d = ensureDay(date); d.ruckMin = (d.ruckMin||0) + Math.max(1, Math.round((Date.now()-d.ruckStart)/60000)); d.ruckStart = null; saveDay(date); }
   if (act === 'suggest') suggest(b);
+  if (act === 'review') weeklyReview(b);
   if (b.dataset.copy) {
     try { await navigator.clipboard.writeText(b.dataset.copy); const t = b.textContent; b.textContent = 'Copied'; setTimeout(() => { b.textContent = t; }, 1500); }
     catch { b.textContent = b.dataset.copy; }
