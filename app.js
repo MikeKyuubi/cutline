@@ -470,7 +470,7 @@ function insights(){
 function insightsHTML(limit){
   const {items, focus} = insights();
   const shown = limit ? items.slice(0, limit) : items;
-  return `<ul class="orders">${shown.map(i => `<li style="grid-template-columns:auto 1fr"><span class="tag ${i.tone === 'ok' ? 'go' : i.tone === 'bad' ? 'avoid' : i.tone === 'warn' ? 'limit' : ''}">${esc(i.icon)}</span><span class="small">${esc(i.text)}</span></li>`).join('')}</ul>
+  return `<ul class="orders">${shown.map(i => `<li class="ins"><span class="tag ${i.tone === 'ok' ? 'go' : i.tone === 'bad' ? 'avoid' : i.tone === 'warn' ? 'limit' : ''}">${esc(i.icon)}</span><span class="small">${esc(i.text)}</span></li>`).join('')}</ul>
     ${focus ? `<div class="coach">${esc('Focus today: ' + focus)}</div>` : ''}`;
 }
 let reviewHTML = '';
@@ -760,7 +760,7 @@ function renderFood(){
       <textarea id="mealIn" placeholder="e.g. carinderia: 1 cup rice, chicken adobo 2 pcs, a bit of pinakbet"></textarea></label>
     <div class="row"><button class="btn" data-act="estimate" ${sample ? '' : 'disabled'}>Estimate & log</button></div>
     <div class="ai-out" id="estOut">${estHTML}</div>
-    <div class="note">Uses your Anthropic API key: roughly US$0.01 to 0.05 per request depending on the model chosen in Setup. Estimates are approximate; portion size is the biggest error.</div>
+    <div class="note">Estimates are approximate; portion size is the biggest error.</div>
   </div>`;
 }
 
@@ -787,7 +787,7 @@ function renderProgress(){
   <div class="card">
     <h3>Insights</h3>
     ${insightsHTML()}
-    <div class="row"><button class="btn" data-act="review" ${sample ? '' : 'disabled'}>AI weekly review</button><span class="small muted">Reads your last 14 days. About US$0.01–0.03.</span></div>
+    <div class="row"><button class="btn" data-act="review" ${sample ? '' : 'disabled'}>AI weekly review</button><span class="small muted">Reads your last 14 days of logs.</span></div>
     ${reviewHTML ? `<div class="ai-out">${reviewHTML}</div>` : ''}
   </div>
   <div class="card">
@@ -1031,9 +1031,9 @@ setInterval(() => { if (today() !== lastDate) { lastDate = today(); render(); } 
 
 /* ---------- Claude helpers ---------- */
 const MODELS = {
-  'claude-opus-5-5':  {label:'Best: most accurate local food knowledge (about $0.03 to 0.05)', fallback:true},
-  'claude-sonnet-5-5':{label:'Balanced: good and cheaper (about $0.01 to 0.02)', fallback:true},
-  'claude-haiku-5-5': {label:'Fast: quickest, a fraction of a cent', fallback:false},
+  'claude-opus-5-5':  {label:'Best: most accurate local food knowledge', fallback:true},
+  'claude-sonnet-5-5':{label:'Balanced: good and quicker', fallback:true},
+  'claude-haiku-5-5': {label:'Fast: quickest answers', fallback:false},
 };
 function getKey(){ try { return localStorage.getItem('cut69key') || ''; } catch { return ''; } }
 function getModel(){ let m = ''; try { m = localStorage.getItem('cut69model') || ''; } catch {} return MODELS[m] ? m : 'claude-opus-5-5'; }
