@@ -749,13 +749,13 @@ function renderFood(){
   </div>
 
   <div class="card" id="aiCard">
-    <h3>Ask Claude</h3>
+    <h3>AI food help</h3>
     ${sample ? '' : '<div class="coach">Add your Anthropic API key in <b>Setup</b> to turn on food suggestions and meal estimates.</div>'}
     <label class="field"><span class="label">Where are you? (city, hotel or street — used only for this question)</span>
       <input id="locIn" value="${esc(profile.location)}" placeholder="e.g. Makati near Ayala, or Kaohsiung Zuoying"></label>
     <div class="row"><button class="btn primary" data-act="suggest" ${sample ? '' : 'disabled'}>Suggest what to eat next</button></div>
     <div class="ai-out" id="suggestOut">${suggestHTML}</div>
-    <div class="row"><button class="btn primary" data-act="snap" ${sample ? '' : 'disabled'}>Take a photo of your meal</button><span class="small muted">Claude estimates it from the picture. Add notes below first if you like (e.g. "half portion", "no rice").</span></div>
+    <div class="row"><button class="btn primary" data-act="snap" ${sample ? '' : 'disabled'}>Take a photo of your meal</button><span class="small muted">The AI estimates it from the picture. Add notes below first if you like (e.g. "half portion", "no rice").</span></div>
     <label class="field"><span class="label">Or describe a meal to estimate its calories</span>
       <textarea id="mealIn" placeholder="e.g. carinderia: 1 cup rice, chicken adobo 2 pcs, a bit of pinakbet"></textarea></label>
     <div class="row"><button class="btn" data-act="estimate" ${sample ? '' : 'disabled'}>Estimate & log</button></div>
@@ -787,7 +787,7 @@ function renderProgress(){
   <div class="card">
     <h3>Insights</h3>
     ${insightsHTML()}
-    <div class="row"><button class="btn" data-act="review" ${sample ? '' : 'disabled'}>Weekly review from Claude</button><span class="small muted">Reads your last 14 days. About US$0.01–0.03.</span></div>
+    <div class="row"><button class="btn" data-act="review" ${sample ? '' : 'disabled'}>AI weekly review</button><span class="small muted">Reads your last 14 days. About US$0.01–0.03.</span></div>
     ${reviewHTML ? `<div class="ai-out">${reviewHTML}</div>` : ''}
   </div>
   <div class="card">
@@ -796,10 +796,12 @@ function renderProgress(){
   </div>
   <div class="card">
     <h3>Last 14 days</h3>
-    <div class="tablebox"><table class="hist"><thead><tr><th>Day</th><th>Weight</th><th>kcal</th><th>Protein</th><th>Ruck</th><th>Lift</th><th>Verdict</th></tr></thead><tbody>
+    <div class="tablebox"><table class="hist"><thead><tr><th>Day</th><th>Weight</th><th>kcal</th><th>Protein</th><th>Ruck</th><th>Lift</th><th>Orders met</th></tr></thead><tbody>
     ${hist.map(dd => { const v = verdict(dd), x = getDay(dd);
-      const vt = dd === date ? (v.passed ? ['ok','pass'] : ['warn','open']) : v.passed ? ['ok','pass'] : ['bad','fail'];
-      return `<tr><td class="num">${DOW[parseYmd(dd).getDay()]} ${dd.slice(5)}</td><td class="num">${x.weight ? x.weight.toFixed(1) : '—'}</td><td class="num">${x.foods.length ? v.tot.total + '/' + v.t.kcal : '—'}</td><td class="num">${v.tot.protein}</td><td class="num">${x.ruckMin||0}/${v.rp.min}</td><td>${v.ls ? v.ls + (v.items[3].s==='ok'?' ✓':'') : '—'}</td><td><span class="pill ${vt[0]}">${vt[1]}</span></td></tr>`; }).join('') || '<tr><td colspan="7" class="muted">Starts today.</td></tr>'}
+      const done = v.items.filter(i => i.s === 'ok').length, all = v.items.length;
+      const vt = v.passed ? ['ok', `${done}/${all} ✓`] : dd === date ? ['warn', `${done}/${all} so far`] : all - done <= 2 ? ['warn', `${done}/${all}`] : ['bad', `${done}/${all}`];
+      const missed = v.items.filter(i => i.s !== 'ok').map(i => i.label).join(', ');
+      return `<tr><td class="num">${DOW[parseYmd(dd).getDay()]} ${dd.slice(5)}</td><td class="num">${x.weight ? x.weight.toFixed(1) : '—'}</td><td class="num">${x.foods.length ? v.tot.total + '/' + v.t.kcal : '—'}</td><td class="num">${v.tot.protein}</td><td class="num">${x.ruckMin||0}/${v.rp.min}</td><td>${v.ls ? v.ls + (v.items[3].s==='ok'?' ✓':'') : '—'}</td><td><span class="pill ${vt[0]}" title="${esc(missed ? 'Missed: ' + missed : 'All orders met')}">${vt[1]}</span></td></tr>`; }).join('') || '<tr><td colspan="7" class="muted">Starts today.</td></tr>'}
     </tbody></table></div>
   </div>`;
 }
@@ -894,7 +896,7 @@ function renderSetup(){
       <div class="row"><button class="btn primary" data-act="health-token">Connect Apple Health</button></div>`}
   </div>` : ''}
   <form class="card" id="aiForm">
-    <h3>Claude food help</h3>
+    <h3>AI food help</h3>
     <div class="small muted">Your API key stays on this device and is never synced. Enter it once on each device. Create one at console.anthropic.com under API keys, and set a monthly spend limit there.</div>
     <div class="fields">
       <label class="field"><span class="label">Anthropic API key</span><input id="aiKey" type="password" autocomplete="off" placeholder="${getKey() ? 'Saved. Paste to replace' : 'sk-ant-…'}"></label>
@@ -1029,9 +1031,9 @@ setInterval(() => { if (today() !== lastDate) { lastDate = today(); render(); } 
 
 /* ---------- Claude helpers ---------- */
 const MODELS = {
-  'claude-opus-5-5':  {label:'Claude Opus 5.5: best local food knowledge (about $0.03 to 0.05)', fallback:true},
-  'claude-sonnet-5-5':{label:'Claude Sonnet 5.5: good and cheaper (about $0.01 to 0.02)', fallback:true},
-  'claude-haiku-5-5': {label:'Claude Haiku 5.5: fastest, a fraction of a cent', fallback:false},
+  'claude-opus-5-5':  {label:'Best: most accurate local food knowledge (about $0.03 to 0.05)', fallback:true},
+  'claude-sonnet-5-5':{label:'Balanced: good and cheaper (about $0.01 to 0.02)', fallback:true},
+  'claude-haiku-5-5': {label:'Fast: quickest, a fraction of a cent', fallback:false},
 };
 function getKey(){ try { return localStorage.getItem('cut69key') || ''; } catch { return ''; } }
 function getModel(){ let m = ''; try { m = localStorage.getItem('cut69model') || ''; } catch {} return MODELS[m] ? m : 'claude-opus-5-5'; }
@@ -1069,12 +1071,12 @@ function aiError(e){
   if (st === 401) return 'Your API key was rejected. Check it in Setup.';
   if (st === 403) return 'This API key is not allowed to use that model.';
   if (st === 429) return 'Rate limit or spend limit reached. Try again in a minute, or check your limits at console.anthropic.com.';
-  if (st >= 500) return 'Claude is busy right now. Try again shortly.';
+  if (st >= 500) return 'The AI service is busy right now. Try again shortly.';
   if (st === 400) return 'The request was rejected (' + ((e && e.message) || 'bad request') + '). Try another model in Setup.';
-  if (c === 'refused') return 'Claude declined that request. Rephrase it.';
-  if (c === 'invalid_json') return 'Claude answered in an unexpected format. Try again.';
+  if (c === 'refused') return 'The AI declined that request. Rephrase it.';
+  if (c === 'invalid_json') return 'The AI answered in an unexpected format. Try again.';
   if (!navigator.onLine) return 'You are offline. Food help needs an internet connection.';
-  return 'Could not reach Claude. Check your connection and try again.';
+  return 'Could not reach the AI service. Check your connection and try again.';
 }
 async function suggest(btn){
   if (!sample) return;
