@@ -161,7 +161,7 @@ const LIFT_DAYS = [1,3,5]; // Mon Wed Fri
 
 /* ---------- state ---------- */
 const DEFAULT_PROFILE = {age:30, sex:'m', heightCm:167, startKg:74, goalKg:69, startDate:today(),
-  activity:1.3, vestKg:10, dbKg:15, stepGoal:8000, coffeeType:'gold', region:'ph', location:'', adjust:0, penalties:true,
+  activity:1.3, vestKg:10, dbKg:15, stepGoal:8000, milestoneKg:72, milestoneName:'First outdoor ruck', coffeeType:'gold', region:'ph', location:'', adjust:0, penalties:true,
   waterRemind:false, remindEvery:60, wakeHour:7, sleepHour:22};
 let profile = clone(DEFAULT_PROFILE);
 let days = {};
@@ -395,6 +395,12 @@ function insights(){
   const wT = getDay(t).weight, wY = getDay(y).weight;
   const avg = avgWeight(t), prevAvg = avgWeight(addDays(t, -7));
   const readings = [...Array(7)].map((_, i) => addDays(t, -i)).filter(d => getDay(d).weight).length;
+  if (profile.milestoneKg) {
+    const ref = avg || latestWeight(t), gap = ref - profile.milestoneKg;
+    out.push(gap <= 0 && readings >= 3
+      ? {tone: 'ok', icon: 'Milestone', text: `Unlocked: ${profile.milestoneName}! Your 7-day average is ${ref.toFixed(1)} kg. Go earn it outside.`}
+      : {tone: '', icon: 'Milestone', text: `${profile.milestoneName} at ${Number(profile.milestoneKg).toFixed(1)} kg: ${Math.max(0, gap).toFixed(1)} kg to go (unlocks on your 7-day average).`});
+  }
 
   // 1. weight
   if (wT && wY) {
