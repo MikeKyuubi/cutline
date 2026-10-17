@@ -122,6 +122,46 @@ const FOODS = {
     ['Club sandwich + fries',900,35,'avoid'],
   ],
 };
+
+// typical carbs / fat / fiber / sodium for listed foods: [carbs g, fat g, fiber g, sodium mg]
+const MACROS = {
+  'Protein oats: instant oats 40 g + 1 scoop ProMatrix (K)':[32,5,4,165], 'Oats 40 g + banana (K)':[54,3,7,5],
+  '2 boiled eggs + 1 pandesal':[15,11,1,330], 'Tuna (in water) pandesal ×2':[30,6,2,700], 'Greek yogurt + banana':[33,4,3,60],
+  'Protein coffee: ½ scoop ProMatrix in coffee':[3,1,1,80], 'Tapsilog with half rice':[50,24,1,1400],
+  'Longsilog / tocilog with full rice':[90,32,1,1300], 'Pandesal ×2':[34,3,1,300], 'Taho, small':[28,2,1,20],
+  'Sardines + 2 eggs + half cup rice':[24,15,1,1100], 'Roast chicken ¼ (skin off) + cucumber & tomato + half cup rice':[26,12,2,600],
+  'Tuna salad: tuna in water + chickpeas + cucumber':[38,8,11,800], 'Pritong isda + pinakbet + half cup rice':[38,24,5,900],
+  'Inihaw na bangus, half + half cup rice':[22,15,0,500], 'Chicken inasal, paa — skin off + half cup rice':[24,16,0,700],
+  'Grilled chicken breast (150 g)':[0,7,0,300], 'Roast chicken, ¼ (skin off)':[0,10,0,500], 'Canned pink salmon (213 g can)':[0,14,0,800],
+  'Pritong isda, 1 medium (not battered)':[2,14,0,400], 'Sinigang na hipon (bowl)':[12,4,3,1200], 'Tinola (bowl, 2 pcs chicken)':[8,10,2,900],
+  'Grilled chicken liver, 3 skewers':[4,7,0,400], 'Ginisang monggo (bowl)':[32,7,10,700], 'Pinakbet (cup)':[14,9,5,600],
+  'Chicken adobo (2 pcs)':[4,26,0,1300], 'Pork menudo (carinderia serving)':[18,24,3,900], 'Beef kaldereta (carinderia serving)':[16,29,3,1000],
+  'Mang Inasal PM1 + 1 rice':[46,30,0,1100], 'Jollibee 1-pc Chickenjoy + rice':[55,24,1,1300],
+  'Pancit canton + 2 pcs glazed fried chicken':[105,44,4,2400], '7-Eleven grilled liempo + kangkong meal':[65,57,3,1400],
+  'Pork sisig (serving)':[5,47,0,1100], 'Lechon kawali (150 g)':[0,59,0,700],
+  'Canned tuna in water (155 g)':[0,2,0,500], "Young's Town sardines in tomato sauce, whole can":[2,4,0,850],
+  "Young's Town sardines in tomato sauce, half can":[1,2,0,425], 'Century Tuna Hot & Spicy, oil drained, whole can':[12,14,0,1000],
+  'Century Tuna Hot & Spicy, whole can (180 g)':[12,21,0,1100], 'Canned chickpeas, drained (1 cup)':[35,3,10,400],
+  'Cucumber + cherry tomatoes (bowl)':[8,0,2,10], 'Half cup rice':[22,0,0,0], '1 cup rice':[45,0,1,0], 'Extra rice (unli-rice round)':[45,0,1,0],
+  'Instant pancit canton, 1 pack (K)':[40,13,2,1200], 'Cup noodles (K)':[38,13,2,1300],
+  'ProMatrix 7 shake, 1 scoop in water':[5,2,2,158], 'Boiled eggs ×2':[1,10,0,140], 'Salted egg (itlog na maalat)':[1,7,0,700],
+  'Beef jerky (30 g)':[6,2,0,600], 'Protein bar (check: 15 g+ protein)':[20,7,5,200], 'Plain Greek yogurt cup (~150 g)':[8,4,0,60],
+  'Low-fat milk 250 ml':[12,5,0,110], 'Unsweetened soy milk 250 ml':[4,4,1,80], 'Banana, lakatan':[25,0,3,1], 'Apple or guava':[20,0,5,2],
+  'Roasted peanuts, small handful (30 g)':[6,14,2,120], 'Skyflakes, 1 pack':[19,5,1,200],
+  'Starbucks matcha latte, tall, nonfat milk':[28,0,1,120], 'Starbucks matcha latte, grande, 2% milk':[34,6,1,160],
+  'Starbucks matcha Frappuccino, grande':[66,15,1,250],
+};
+const FOOD_INDEX = {};
+Object.values(FOODS).forEach(list => list.forEach(r => { FOOD_INDEX[r[0]] = r; }));
+// nutrients of one logged food: stored values, else the table (scaled to the logged calories), else an estimate
+function nutr(f){
+  if (f.carbs != null) return {c:+f.carbs||0, f:+f.fat||0, fib:+f.fiber||0, na:+f.sodium||0};
+  const base = String(f.name || '').replace(/ \(half\)$/, ''), m = MACROS[base], row = FOOD_INDEX[base];
+  if (m && row) { const k = row[1] ? (+f.kcal||0) / row[1] : 1; return {c:m[0]*k, f:m[1]*k, fib:m[2]*k, na:m[3]*k}; }
+  const rest = Math.max(0, (+f.kcal||0) - 4 * (+f.protein||0));
+  return {c: rest * 0.55 / 4, f: rest * 0.45 / 9, fib: 0, na: 0};
+}
+
 const REGION_LABEL = {ph:'Philippines (carinderia, fast food, 7-Eleven)', tw:'Taiwan (7-Eleven / FamilyMart, buffet bento)', hotel:'Hotel buffet / room service'};
 
 const EX = {
@@ -269,14 +309,21 @@ function targets(date){
   const atGoal = w <= profile.goalKg;
   const kcal = atGoal ? r50(maint + 150) : Math.max(1500, r50(maint - 500 + Number(profile.adjust||0)));
   const protein = Math.round(w * 1.8 / 5) * 5;
-  return {w, maint:Math.round(maint), kcal, protein, atGoal};
+  // fat ~27% of calories, carbs fill the rest; fiber and sodium follow standard adult guidance
+  const fat = Math.round(kcal * 0.27 / 9);
+  const carbs = Math.max(0, Math.round((kcal - protein * 4 - fat * 9) / 4));
+  return {w, maint:Math.round(maint), kcal, protein, fat, carbs, fiber:30, sodium:2000, atGoal};
 }
 const coffeeKcal = () => (COFFEE[profile.coffeeType] || COFFEE.black).kcal;
 function dayTotals(d){
   const food = d.foods.reduce((a,f) => a + (+f.kcal||0), 0);
   const protein = d.foods.reduce((a,f) => a + (+f.protein||0), 0);
   const coffee = d.coffee * coffeeKcal();
-  return {food, protein, coffee, total: food + coffee};
+  const n = d.foods.map(nutr);
+  const sum = k => n.reduce((a, x) => a + x[k], 0);
+  return {food, protein, coffee, total: food + coffee,
+    carbs: Math.round(sum('c') + coffee * 0.5 / 4), fat: Math.round(sum('f') + coffee * 0.5 / 9),
+    fiber: Math.round(sum('fib')), sodium: Math.round(sum('na'))};
 }
 const ruckRate = w => (5.5 - 1) * 3.5 * (w + Number(profile.vestKg||0)) / 200; // net kcal/min, loaded brisk walk
 function ruckBase(date){
@@ -507,7 +554,7 @@ let suggestHTML = '', estHTML = '', estItems = [], setupDirty = false;
 function render(){
   const ae = document.activeElement;
   const keep = ae && ae.id && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName) ? [ae.id, ae.value] : null;
-  const vals = {}; ['mealIn','cfName','cfKcal','cfProt','locIn'].forEach(id => { const el = document.getElementById(id); if (el) vals[id] = el.value; });
+  const vals = {}; ['mealIn','cfName','cfKcal','cfProt','cfCarb','cfFat','locIn'].forEach(id => { const el = document.getElementById(id); if (el) vals[id] = el.value; });
   render0();
   Object.entries(vals).forEach(([id,v]) => { const el = document.getElementById(id); if (el) el.value = v; });
   if (keep) { const el = document.getElementById(keep[0]); if (el) { el.value = keep[1]; el.focus(); } }
@@ -535,6 +582,65 @@ function coachLine(v, d){
 
 const CUP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 8h12v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V8z"/><path d="M16 10h2a2 2 0 0 1 0 4h-2"/><path d="M8 3v2M12 3v2"/></svg>';
 
+
+function ringSVG(frac, size, stroke, color){
+  const r = (size - stroke) / 2, c = 2 * Math.PI * r, off = c * (1 - Math.min(1, Math.max(0, frac)));
+  return `<svg class="ring" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" aria-hidden="true">
+    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="var(--chip)" stroke-width="${stroke}"/>
+    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${color}" stroke-width="${stroke}" stroke-linecap="round"
+      stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" transform="rotate(-90 ${size/2} ${size/2})"/></svg>`;
+}
+function dayTone(dd){
+  if (dd > today()) return 'future';
+  if (dd < profile.startDate) return 'none';
+  const x = getDay(dd);
+  if (!x.foods.length && !x.weight && !x.ruckMin) return dd === today() ? 'today' : 'none';
+  if (dd === today()) return 'today';
+  const v = verdict(dd), done = v.items.filter(i => i.s === 'ok').length;
+  return v.passed ? 'ok' : v.items.length - done <= 2 ? 'warn' : 'bad';
+}
+function budgetCard(date, v){
+  const t = v.t, tot = v.tot, left = t.kcal - tot.total, over = left < 0;
+  const monday = addDays(date, -((parseYmd(date).getDay() + 6) % 7));
+  const strip = [...Array(7)].map((_, i) => addDays(monday, i)).map(dd =>
+    `<div class="wd ${dayTone(dd)}" title="${dd}"><span>${'MTWTFSS'[parseYmd(dd).getDay() === 0 ? 6 : parseYmd(dd).getDay() - 1]}</span><b class="num">${+dd.slice(8)}</b></div>`).join('');
+  const macro = (label, val, goal, color, capOver) => `<div class="macro">
+      <div><div class="num"><b class="mval">${Math.round(val)}</b><span class="muted small"> / ${goal}g</span></div><div class="small muted">${label}</div></div>
+      ${ringSVG(goal ? val / goal : 0, 46, 6, capOver && val > goal * 1.1 ? 'var(--bad)' : color)}</div>`;
+  const h = new Date().getHours(), tips = [];
+  if (tot.sodium > t.sodium) tips.push(`Sodium is ${tot.sodium.toLocaleString()} mg, over the 2,000 mg limit. Drink extra water and keep the rest of today off canned, instant and salted food.`);
+  else if (tot.sodium > t.sodium * 0.75 && h < 17) tips.push(`Sodium is already ${tot.sodium.toLocaleString()} mg. Keep dinner low-salt: grilled or fresh, no canned or instant.`);
+  if (tot.fat > t.fat * 1.15) tips.push('Fat is high today, usually from fried food, skin or oil. Make the next meal grilled or steamed.');
+  if (h >= 16 && tot.fiber < 15) tips.push('Fiber is low. Add cucumber and tomato, a banana or guava, oats, chickpeas or monggo.');
+  if (tot.carbs > t.carbs * 1.15) tips.push('Carbs are high. Go easy on rice and noodles for the rest of today.');
+  const bar = (label, val, goal, unit, color, isLimit) => `<div class="nut">
+      <div class="spread small"><span>${label}</span><span class="num muted">${Math.round(val).toLocaleString()} / ${goal.toLocaleString()} ${unit}${isLimit ? ' max' : ''}</span></div>
+      <div class="bar ${isLimit && val > goal ? 'over' : ''}"><i style="width:${Math.min(100, goal ? val / goal * 100 : 0)}%;background:${isLimit && val > goal ? 'var(--bad)' : color}"></i></div></div>`;
+  return `<div class="card">
+    <div class="wstrip">${strip}</div>
+    <div class="spread"><h2>Daily budget</h2><button class="btn ghost" data-goto="setup">Edit</button></div>
+    <div class="budget">
+      <div class="bring">
+        <div class="bring-wrap">${ringSVG(t.kcal ? tot.total / t.kcal : 0, 156, 14, over ? 'var(--bad)' : 'var(--accent)')}
+          <div class="bring-in"><span class="small muted">${over ? 'Over by' : 'Remaining'}</span><b class="bnum num" style="color:${over ? 'var(--bad)' : 'var(--ink)'}">${Math.abs(left).toLocaleString()}</b><span class="small muted">kcal</span></div>
+        </div>
+        <div class="small muted num">Goal ${t.kcal.toLocaleString()} kcal · eaten ${tot.total.toLocaleString()}</div>
+      </div>
+      <div class="macros">
+        ${macro('Carbs', tot.carbs, t.carbs, 'var(--warn)', true)}
+        ${macro('Protein', tot.protein, t.protein, 'var(--ok)', false)}
+        ${macro('Fat', tot.fat, t.fat, 'var(--fat)', true)}
+      </div>
+    </div>
+    <div class="nuts">
+      ${bar('Fiber', tot.fiber, t.fiber, 'g', 'var(--ok)', false)}
+      ${bar('Sodium', tot.sodium, t.sodium, 'mg', 'var(--muted)', true)}
+    </div>
+    ${tips.length ? `<div class="coach">${esc(tips[0])}</div>` : ''}
+    <div class="small muted">Carbs, fat, fiber and sodium come from the food list or the AI estimate; custom entries without them are estimated.</div>
+  </div>`;
+}
+
 function renderToday(){
   const date = today(), d = getDay(date), v = verdict(date);
   const [ctone, cline] = coachLine(v, d);
@@ -549,6 +655,7 @@ function renderToday(){
   let notifState = 'unsupported';
   try { if ('Notification' in window) notifState = Notification.permission; } catch {}
   $('#tab-today').innerHTML = `
+  ${budgetCard(date, v)}
   ${waterDue() ? `<div class="coach bad">Drink water now: one glass (250 ml). ${sinceDrink == null ? 'Nothing logged yet today.' : `Last glass ${sinceDrink} min ago.`} <button class="btn" data-water="250" style="margin-left:6px">Done +250 ml</button></div>` : ''}
   <div class="card">
     <div class="spread"><h2>Orders · ${DOW[parseYmd(date).getDay()]} ${date.slice(5)}</h2>
@@ -565,17 +672,7 @@ function renderToday(){
     ${insightsHTML(3)}
   </div>
 
-  <div class="grid2">
-    <div class="card">
-      <div class="label">Calories left today</div>
-      <div class="spread"><span class="big num" style="color:${v.tot.total > v.t.kcal ? 'var(--bad)' : 'var(--ink)'}">${v.t.kcal - v.tot.total}</span><span class="small muted num">${v.tot.total} / ${v.t.kcal}</span></div>
-      <div class="bar ${v.tot.total > v.t.kcal ? 'over':''}"><i style="width:${pct}%"></i></div>
-      <div class="label">Protein</div>
-      <div class="spread"><span class="num" style="font-weight:600">${v.tot.protein} g</span><span class="small muted num">target ${v.t.protein} g</span></div>
-      <div class="bar"><i style="width:${ppct}%"></i></div>
-      <div class="small muted">Food budget after 3 coffees: <span class="num">${foodBudget}</span> kcal.</div>
-    </div>
-    <div class="card">
+  <div class="card">
       <div class="label">Coffee · 3 a day, already budgeted</div>
       <div class="cups">${[0,1,2].map(i => `<button class="cup ${d.coffee > i ? 'on':''}" data-cup="${i}" aria-label="Coffee ${i+1}">${CUP}</button>`).join('')}
         ${d.coffee > 3 ? `<span class="pill bad">+${d.coffee-3} extra</span>` : ''}</div>
@@ -584,7 +681,6 @@ function renderToday(){
       <div class="label">Morning weight</div>
       <form class="row" id="wForm"><input id="wIn" type="number" step="0.1" min="30" max="200" inputmode="decimal" placeholder="kg" value="${d.weight ?? ''}" style="width:110px"><button class="btn primary" type="submit">Save</button></form>
       <div class="small muted">Weigh after the toilet, before food or coffee. Daily numbers jump ±1 kg from water; the 7-day average is what counts.</div>
-    </div>
   </div>
 
   ${uid ? activityCard(date) : ''}
@@ -750,6 +846,8 @@ function renderFood(){
       <label class="field"><span class="label">Food</span><input id="cfName" required placeholder="e.g. 2 pcs pork BBQ"></label>
       <label class="field"><span class="label">kcal</span><input id="cfKcal" type="number" min="0" required inputmode="numeric"></label>
       <label class="field"><span class="label">Protein g</span><input id="cfProt" type="number" min="0" value="0" inputmode="numeric"></label>
+      <label class="field"><span class="label">Carbs g (optional)</span><input id="cfCarb" type="number" min="0" inputmode="numeric"></label>
+      <label class="field"><span class="label">Fat g (optional)</span><input id="cfFat" type="number" min="0" inputmode="numeric"></label>
       <div class="field" style="align-self:end"><button class="btn primary" type="submit">Log it</button></div>
     </form>
   </div>
@@ -970,7 +1068,8 @@ document.addEventListener('click', async e => {
   if (act === 'clearkey') { try { localStorage.removeItem('cut69key'); } catch {} sample = null; render(); }
   if (act === 'estimate') estimate(b);
   if (act === 'snap') { photoInput().click(); return; }
-  if (act === 'estlog') { const f = Number(b.dataset.frac || 1); estItems.forEach(x => ensureDay(date).foods.push({name: f < 1 ? x.name + ' (half)' : x.name, kcal: Math.round(x.kcal * f), protein: Math.round(x.protein * f), at:Date.now()})); estItems = []; estHTML = '<div class="small muted">Logged.</div>'; const m = $('#mealIn'); if (m) m.value = ''; saveDay(date); }
+  if (act === 'estlog') { const f = Number(b.dataset.frac || 1); estItems.forEach(x => ensureDay(date).foods.push({name: f < 1 ? x.name + ' (half)' : x.name, kcal: Math.round(x.kcal * f), protein: Math.round(x.protein * f),
+    carbs: Math.round(x.carbs * f), fat: Math.round(x.fat * f), fiber: Math.round(x.fiber * f), sodium: Math.round(x.sodium * f), at:Date.now()})); estItems = []; estHTML = '<div class="small muted">Logged.</div>'; const m = $('#mealIn'); if (m) m.value = ''; saveDay(date); }
 });
 document.addEventListener('submit', e => {
   e.preventDefault();
@@ -982,7 +1081,10 @@ document.addEventListener('submit', e => {
     sample = getKey() ? {json: aiJson} : null; render();
     const m = $('#aiMsg'); if (m) m.textContent = 'Saved';
   }
-  if (e.target.id === 'customFood') { logFood($('#cfName').value.trim(), +$('#cfKcal').value, +$('#cfProt').value || 0); }
+  if (e.target.id === 'customFood') {
+    const opt = id => $(id).value === '' ? undefined : Math.round(+$(id).value);
+    logFood($('#cfName').value.trim(), +$('#cfKcal').value, +$('#cfProt').value || 0, {carbs: opt('#cfCarb'), fat: opt('#cfFat')});
+  }
   if (e.target.id === 'setupForm') {
     const n = (id, d) => { const v = parseFloat($(id).value); return isFinite(v) ? v : d; };
     profile = {...profile, age:n('#sAge',profile.age), sex:$('#sSex').value, heightCm:n('#sH',profile.heightCm), startKg:n('#sStart',profile.startKg),
@@ -1003,9 +1105,11 @@ document.addEventListener('change', e => {
   if (e.target.id === 'regionSel') { profile.region = e.target.value; saveProfile(); }
   if (e.target.id === 'locIn') { profile.location = e.target.value.trim(); saveProfile(); }
 });
-function logFood(name, kcal, protein){
+function logFood(name, kcal, protein, extra = {}){
   if (!name || !(kcal >= 0)) return;
-  ensureDay(today()).foods.push({name: name.slice(0,120), kcal: Math.round(kcal), protein: Math.round(protein||0), at: Date.now()});
+  const n = nutr({name, kcal, protein});
+  ensureDay(today()).foods.push({name: name.slice(0,120), kcal: Math.round(kcal), protein: Math.round(protein||0),
+    carbs: extra.carbs ?? Math.round(n.c), fat: extra.fat ?? Math.round(n.f), fiber: Math.round(n.fib), sodium: Math.round(n.na), at: Date.now()});
   saveDay(today());
 }
 function showTab(){
@@ -1113,10 +1217,11 @@ async function estimate(btn){
   try {
     const res = await sample.json(
       `Estimate the calories and protein of this meal as eaten in ${profile.location || REGION_LABEL[profile.region]}. Use typical local portion sizes; if a portion is unclear, assume a normal single serving and round calories up slightly rather than down.\nMeal: ${txt.slice(0,800)}\n` +
-      `Reply with only a JSON array, one object per distinct item: {"name": string, "kcal": number, "protein": number}.`, {modelTier:'quick'});
+      `Reply with only a JSON array, one object per distinct item: {"name": string, "kcal": number, "protein": number, "carbs": number, "fat": number, "fiber": number, "sodium": number (mg)}.`, {modelTier:'quick'});
     const arr = Array.isArray(res) ? res.filter(x => x && x.name && isFinite(x.kcal)).slice(0,12) : [];
     if (!arr.length) { estHTML = '<div class="muted small">Could not split that meal. Try listing each item.</div>'; return; }
-    estItems = arr.map(x => ({name:String(x.name).slice(0,120), kcal:Math.round(+x.kcal), protein:Math.round(+x.protein||0)}));
+    estItems = arr.map(x => ({name:String(x.name).slice(0,120), kcal:Math.round(+x.kcal), protein:Math.round(+x.protein||0),
+      carbs:Math.round(+x.carbs||0), fat:Math.round(+x.fat||0), fiber:Math.round(+x.fiber||0), sodium:Math.round(+x.sodium||0)}));
     const tot = arr.reduce((a,x) => a + Math.round(+x.kcal), 0), pr = arr.reduce((a,x) => a + Math.round(+x.protein||0), 0);
     estHTML = `<ul class="log">${arr.map(x => `<li><span class="nm">${esc(x.name)}</span><span class="num small">${Math.round(+x.kcal)} kcal · ${Math.round(+x.protein||0)} g</span><span></span></li>`).join('')}</ul>
       <div class="row"><b class="num">${tot} kcal · ${pr} g protein</b><button class="btn primary" data-act="estlog">Log all</button><button class="btn" data-act="estlog" data-frac="0.5">Log half</button></div>`;
@@ -1167,11 +1272,12 @@ async function photoEstimate(file){
       `This photo shows a meal someone is about to eat in ${profile.location || REGION_LABEL[profile.region]}. Identify each distinct food item and estimate its calories and protein for the portion visible on the plate. ` +
       `Judge size against the plate, utensils and hands. Account for cooking oil, breading, sauces and glazes. If unsure, round calories up slightly rather than down.` +
       (notes ? `\nThe person added this note: ${notes.slice(0, 400)}` : '') +
-      `\nReply with only a JSON array, one object per distinct item: {"name": string (short, include the portion, e.g. "Pancit canton, ~1.5 cups"), "kcal": number, "protein": number}.`,
+      `\nReply with only a JSON array, one object per distinct item: {"name": string (short, include the portion, e.g. "Pancit canton, ~1.5 cups"), "kcal": number, "protein": number, "carbs": number, "fat": number, "fiber": number, "sodium": number (mg)}.`,
       {modelTier:'default', image: shot.b64});
     const arr = Array.isArray(res) ? res.filter(x => x && x.name && isFinite(x.kcal)).slice(0, 12) : [];
     if (!arr.length) { estHTML = thumb + '<div class="muted small">Could not recognise food in that photo. Try a clearer shot from above.</div>'; return; }
-    estItems = arr.map(x => ({name:String(x.name).slice(0,120), kcal:Math.round(+x.kcal), protein:Math.round(+x.protein||0)}));
+    estItems = arr.map(x => ({name:String(x.name).slice(0,120), kcal:Math.round(+x.kcal), protein:Math.round(+x.protein||0),
+      carbs:Math.round(+x.carbs||0), fat:Math.round(+x.fat||0), fiber:Math.round(+x.fiber||0), sodium:Math.round(+x.sodium||0)}));
     const tot = estItems.reduce((a,x) => a + x.kcal, 0), pr = estItems.reduce((a,x) => a + x.protein, 0);
     estHTML = thumb + `<ul class="log">${estItems.map(x => `<li><span class="nm">${esc(x.name)}</span><span class="num small">${x.kcal} kcal · ${x.protein} g</span><span></span></li>`).join('')}</ul>
       <div class="row"><b class="num">${tot} kcal · ${pr} g protein</b><button class="btn primary" data-act="estlog">Log all</button><button class="btn" data-act="estlog" data-frac="0.5">Log half</button></div>
