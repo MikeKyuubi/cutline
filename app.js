@@ -155,11 +155,14 @@ const FOOD_INDEX = {};
 Object.values(FOODS).forEach(list => list.forEach(r => { FOOD_INDEX[r[0]] = r; }));
 // nutrients of one logged food: stored values, else the table (scaled to the logged calories), else an estimate
 function nutr(f){
-  if (f.carbs != null) return {c:+f.carbs||0, f:+f.fat||0, fib:+f.fiber||0, na:+f.sodium||0};
+  if (f.carbs != null && (+f.fiber || +f.sodium || !(+f.kcal) || MACROS[String(f.name||'').replace(/ \(half\)$/, '')]))
+    return {c:+f.carbs||0, f:+f.fat||0, fib:+f.fiber||0, na:+f.sodium||0};
+  if (f.carbs != null) { const kc = +f.kcal||0; return {c:+f.carbs||0, f:+f.fat||0, fib: kc * 0.006, na: kc * 1.3, est: true}; }
   const base = String(f.name || '').replace(/ \(half\)$/, ''), m = MACROS[base], row = FOOD_INDEX[base];
   if (m && row) { const k = row[1] ? (+f.kcal||0) / row[1] : 1; return {c:m[0]*k, f:m[1]*k, fib:m[2]*k, na:m[3]*k}; }
+  // unknown food: split the non-protein calories, and assume typical Filipino cooking for fiber and salt
   const rest = Math.max(0, (+f.kcal||0) - 4 * (+f.protein||0));
-  return {c: rest * 0.55 / 4, f: rest * 0.45 / 9, fib: 0, na: 0};
+  return {c: rest * 0.55 / 4, f: rest * 0.45 / 9, fib: (+f.kcal||0) * 0.006, na: (+f.kcal||0) * 1.3, est: true};
 }
 
 const REGION_LABEL = {ph:'Philippines (carinderia, fast food, 7-Eleven)', tw:'Taiwan (7-Eleven / FamilyMart, buffet bento)', hotel:'Hotel buffet / room service'};
@@ -323,7 +326,7 @@ function dayTotals(d){
   const sum = k => n.reduce((a, x) => a + x[k], 0);
   return {food, protein, coffee, total: food + coffee,
     carbs: Math.round(sum('c') + coffee * 0.5 / 4), fat: Math.round(sum('f') + coffee * 0.5 / 9),
-    fiber: Math.round(sum('fib')), sodium: Math.round(sum('na'))};
+    fiber: Math.round(sum('fib')), sodium: Math.round(sum('na')), estimated: n.filter(x => x.est).length};
 }
 const ruckRate = w => (5.5 - 1) * 3.5 * (w + Number(profile.vestKg||0)) / 200; // net kcal/min, loaded brisk walk
 function ruckBase(date){
@@ -635,9 +638,9 @@ function budgetCard(date, v){
     <div class="nuts">
       ${bar('Fiber', tot.fiber, t.fiber, 'g', 'var(--ok)', false)}
       ${bar('Sodium', tot.sodium, t.sodium, 'mg', 'var(--muted)', true)}
+      ${tot.estimated ? `<div class="small muted">≈ ${tot.estimated} food${tot.estimated > 1 ? 's' : ''} today ha${tot.estimated > 1 ? 've' : 's'} no nutrient data, so their fiber and sodium are estimated.</div>` : ''}
     </div>
     ${tips.length ? `<div class="coach">${esc(tips[0])}</div>` : ''}
-    <div class="small muted">Carbs, fat, fiber and sodium come from the food list or the AI estimate; custom entries without them are estimated.</div>
   </div>`;
 }
 
@@ -798,6 +801,11 @@ function mealNow(){ const h = new Date().getHours(); return h < 10 ? 'b' : h < 1
 const mealsOf = f => f[4] || 'blsd';
 // share of the day's food each meal usually takes; used to size "best picks" to the meal you are on
 const MEAL_SHARE = {b:0.25, l:0.35, s:0.1, d:0.3};
+function nutLine(row){
+  const m = MACROS[row[0]] || (() => { const e = nutr({name: row[0], kcal: row[1], protein: row[2]}); return [e.c, e.f, e.fib, e.na]; })();
+  const r = x => Math.round(x);
+  return `P ${row[2]}g · C ${r(m[0])}g · F ${r(m[1])}g · Fiber ${r(m[2])}g · Na ${r(m[3]).toLocaleString()}mg${m[3] >= 900 ? ' <span class="tag limit">salty</span>' : ''}`;
+}
 function bestPicks(meal, left, pLeft){
   if (left < 60) return [];
   const order = ['b','l','s','d'], idx = order.indexOf(meal);
@@ -826,7 +834,7 @@ function renderFood(){
   $('#tab-food').innerHTML = `
   <div class="card">
     <div class="spread"><h2>Best picks · ${mealName}</h2><span class="num small">${left} kcal · ${pLeft} g protein left</span></div>
-    ${picks.length ? `<div class="foods">${picks.map((x, i) => `<button class="food" data-addfood="${esc(x.f[0])}|${x.f[1]}|${x.f[2]}" ${i === 0 ? 'style="border-color:var(--accent)"' : ''}><span class="fn">${i === 0 ? '<span class="tag go">best</span> ' : ''}${esc(x.f[0])}</span><span class="fk">${x.f[1]}</span><span class="fp">${x.f[2]} g protein · leaves ${left - x.f[1]} kcal, ${Math.max(0, pLeft - x.f[2])} g protein to go</span></button>`).join('')}</div>
+    ${picks.length ? `<div class="foods">${picks.map((x, i) => `<button class="food" data-addfood="${esc(x.f[0])}|${x.f[1]}|${x.f[2]}" ${i === 0 ? 'style="border-color:var(--accent)"' : ''}><span class="fn">${i === 0 ? '<span class="tag go">best</span> ' : ''}${esc(x.f[0])}</span><span class="fk">${x.f[1]}</span><span class="fp">${nutLine(x.f)}<br>leaves ${left - x.f[1]} kcal, ${Math.max(0, pLeft - x.f[2])} g protein to go</span></button>`).join('')}</div>
     <div class="note">Chosen for the most protein per calorie that fits about ${Math.round(picks[0].budget)} kcal for this meal, given what you've eaten today.</div>`
     : `<div class="coach ${left < 60 ? 'bad' : ''}">${left < 60 ? 'You are at your limit for today. Water, black coffee or plain tea only.' : 'Nothing in the list fits what you have left. Try the Snack tab, or a custom entry.'}</div>`}
   </div>
@@ -836,7 +844,7 @@ function renderFood(){
     <div class="row" role="tablist">${MEALS.map(([k, n]) => `<button class="btn ${k === meal ? 'primary' : ''}" data-meal="${k}" role="tab" aria-selected="${k === meal}">${n}</button>`).join('')}</div>
     <div class="row"><select id="regionSel" style="width:auto">${Object.keys(FOODS).map(k => `<option value="${k}" ${k===profile.region?'selected':''}>${esc(REGION_LABEL[k])}</option>`).join('')}</select>
       <input id="foodSearch" type="search" placeholder="Filter…" value="${esc(foodQuery)}" style="flex:1"></div>
-    <div class="foods">${list.map((f,i) => `<button class="food" data-addfood="${esc(f[0])}|${f[1]}|${f[2]}"><span class="fn">${esc(f[0])}</span><span class="fk">${f[1]}</span><span class="fp">${f[2]} g protein · <span class="tag ${f[3]}">${f[3]}</span>${f[1] > left ? ' · <b style="color:var(--bad)">over your remaining budget</b>' : ''}</span></button>`).join('') || '<div class="muted small">No match.</div>'}</div>
+    <div class="foods">${list.map((f,i) => `<button class="food" data-addfood="${esc(f[0])}|${f[1]}|${f[2]}"><span class="fn">${esc(f[0])}</span><span class="fk">${f[1]}</span><span class="fp">${nutLine(f)} · <span class="tag ${f[3]}">${f[3]}</span>${f[1] > left ? ' · <b style="color:var(--bad)">over your remaining budget</b>' : ''}</span></button>`).join('') || '<div class="muted small">No match.</div>'}</div>
     <div class="note">Values are typical estimates. Tap to log one serving. (K) = make it with your kettle.</div>
   </div>
 
