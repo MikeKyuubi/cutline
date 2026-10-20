@@ -199,7 +199,32 @@ const EX = {
     steps:['Lie on your back, arms pointing at the ceiling, hips and knees bent to 90°.','Press your lower back flat into the floor.','Slowly reach the opposite arm and leg toward the floor.','Return and switch sides. Your lower back never lifts.'],
     cue:'Breathe out as you reach.',miss:'Going fast, lower back arching off the floor.'},
 };
-const WORKOUTS = {A:['goblet','floorpress','row','revlunge','plank'], B:['rdl','pushup','ohp','splitsq','deadbug']};
+Object.assign(EX, {
+  bwsquat:{name:'Bodyweight squat',sets:'3 × 15–20',
+    steps:['Feet shoulder-width, toes turned out a little, arms straight out in front.','Sit down between your heels until your thighs reach parallel.','Keep your chest up and knees following your toes.','Stand by pushing through the whole foot.'],
+    cue:'Take 3 seconds on the way down.',miss:'Heels lifting, knees caving in.'},
+  pushupbw:{name:'Push-up',sets:'3 × (max − 2)',
+    steps:['Hands slightly wider than shoulders, body straight from head to heels.','Lower until your chest is a fist away from the floor, elbows about 45° from your body.','Push the floor away to full lockout.','Too hard? Put your hands on a bed or table, or do them from your knees.'],
+    cue:'Stop every set 2 reps before you would fail.',miss:'Hips sagging, elbows flared wide, half reps.'},
+  bridge:{name:'Glute bridge',sets:'3 × 15',
+    steps:['Lie on your back, knees bent, feet flat and close to your hips.','Push through your heels and lift your hips until your body is straight from knees to shoulders.','Squeeze your glutes hard for 2 seconds at the top.','Lower slowly.'],
+    cue:'Push through the heels, not the toes.',miss:'Arching the lower back instead of using the glutes.'},
+  superman:{name:'Superman hold',sets:'3 × 20–30 s',
+    steps:['Lie face down, arms stretched out in front.','Lift your arms, chest and legs a few centimetres off the floor.','Hold, looking at the floor, not forward.','Lower and rest.'],
+    cue:'Long and low, not high.',miss:'Cranking the neck up.'},
+  wallsit:{name:'Wall sit',sets:'3 × 30–45 s',
+    steps:['Back flat against a wall, feet about 60 cm out.','Slide down until your thighs are parallel to the floor.','Knees above the ankles.','Hold, breathing slowly.'],
+    cue:'Push your back into the wall.',miss:'Sitting too high to make it easier.'},
+  bwsplit:{name:'Split squat',sets:'3 × 10 per leg',
+    steps:['Take a long step forward and stay in that stance.','Lower the back knee straight down toward the floor.','Front shin stays close to vertical.','Push through the front heel to rise. Finish one leg, then switch.'],
+    cue:'Most of your weight on the front leg.',miss:'Steps too short, so the front knee shoots forward.'},
+});
+const WORKOUTS_DB = {A:['goblet','floorpress','row','revlunge','plank'], B:['rdl','pushup','ohp','splitsq','deadbug']};
+const WORKOUTS_BW = {A:['bwsquat','pushupbw','bridge','superman','plank'], B:['bwsplit','pushupbw','wallsit','superman','deadbug']};
+// each person's sessions follow their equipment
+const WORKOUTS_FOR = () => Number(profile.dbKg) > 0 ? WORKOUTS_DB : WORKOUTS_BW;
+const liftName = () => Number(profile.dbKg) > 0 ? 'Dumbbell' : 'Bodyweight';
+const coffeeCups = () => Number(profile.coffeeCups ?? 3);
 const LIFT_DAYS = [1,3,5]; // Mon Wed Fri
 
 /* ---------- state ---------- */
@@ -310,7 +335,7 @@ function targets(date){
   const w = latestWeight(date);
   const maint = bmr(w) * Number(profile.activity);
   const atGoal = w <= profile.goalKg;
-  const kcal = atGoal ? r50(maint + 150) : Math.max(1500, r50(maint - 500 + Number(profile.adjust||0)));
+  const kcal = atGoal ? r50(maint + 150) : Math.max(profile.sex === 'f' ? 1200 : 1500, r50(maint - 500 + Number(profile.adjust||0)));
   const protein = Math.round(w * 1.8 / 5) * 5;
   // fat ~27% of calories, carbs fill the rest; fiber and sodium follow standard adult guidance
   const fat = Math.round(kcal * 0.27 / 9);
@@ -331,8 +356,8 @@ function dayTotals(d){
 const ruckRate = w => (5.5 - 1) * 3.5 * (w + Number(profile.vestKg||0)) / 200; // net kcal/min, loaded brisk walk
 function ruckBase(date){
   const wk = Math.floor(Math.max(0, diffDays(profile.startDate, date)) / 7);
-  if (parseYmd(date).getDay() === 0) return {min:30, vest:false};
-  return {min:[45,50,60][Math.min(wk,2)], vest:true};
+  if (parseYmd(date).getDay() === 0) return {min:30, vest:false, recovery:true};
+  return {min:[45,50,60][Math.min(wk,2)], vest: Number(profile.vestKg) > 0};
 }
 function ruckPlan(date){
   const p = {...ruckBase(date), why:[]};
@@ -401,8 +426,8 @@ function verdict(date){
   const items = [
     {k:'kcal', label:`Eat ≤ ${t.kcal} kcal`, val:`${tot.total}`, s: tot.total > t.kcal + 50 ? 'bad' : (d.foods.length ? (isToday ? 'open' : 'ok') : st(false,true))},
     {k:'protein', label:`Protein ≥ ${t.protein} g`, val:`${tot.protein} g`, s: st(tot.protein >= t.protein*0.85, true)},
-    {k:'ruck', label: rp.vest ? `Ruck ${rp.min} min with vest` : `Recovery walk ${rp.min} min, no vest`, val:`${d.ruckMin||0} min`, s: st((d.ruckMin||0) >= rp.min, true)},
-    ls ? {k:'lift', label:`Dumbbell session ${ls}`, val:`${(d.workoutDone||[]).filter(x=>WORKOUTS[ls].includes(x)).length}/5`, s: st(WORKOUTS[ls].every(x => (d.workoutDone||[]).includes(x)), true)}
+    {k:'ruck', label: rp.recovery ? `Recovery walk ${rp.min} min, easy pace` : rp.vest ? `Ruck ${rp.min} min with vest` : `Brisk walk ${rp.min} min`, val:`${d.ruckMin||0} min`, s: st((d.ruckMin||0) >= rp.min, true)},
+    ls ? {k:'lift', label:`${liftName()} session ${ls}`, val:`${(d.workoutDone||[]).filter(x=>WORKOUTS_FOR()[ls].includes(x)).length}/5`, s: st(WORKOUTS_FOR()[ls].every(x => (d.workoutDone||[]).includes(x)), true)}
        : {k:'lift', label:'No lifting today — 10 min stretching', val:'rest', s:'ok'},
     {k:'weigh', label:'Morning weigh-in', val: d.weight ? d.weight.toFixed(1)+' kg' : '—', s: st(!!d.weight, true)},
     ...(healthToken && stepGoal() && (isToday || health[date] || d.extraSteps) ? [{k:'steps', label:`Walk ${stepGoal().toLocaleString()} steps`, val: stepsFor(date).toLocaleString(), s: st(stepsFor(date) >= stepGoal(), true)}] : []),
@@ -514,7 +539,7 @@ function insights(){
       {k: 'protein', miss: 1 - proteinHits / n, text: 'Protein is your weakest habit. Start the day with protein oats or tuna pandesal, and keep a scoop of ProMatrix for the evening.'},
       {k: 'ruck', miss: ruckPlan ? 1 - Math.min(1, ruckDone / ruckPlan) : 0, text: `You've done ${ruckDone} of ${ruckPlan} planned ruck minutes. Do today's ruck before dinner, or split it: stairs at lunch, walk after dinner.`},
       {k: 'kcal', miss: fed.length ? kcalOver / fed.length : 0, text: 'Calories went over on several days. Log meals before eating them, and swap one fried or noodle meal for a grilled one.'},
-      {k: 'lift', miss: liftPlan ? 1 - liftDone / liftPlan : 0, text: 'Missed dumbbell sessions. Lifting is what keeps the weight you lose as fat, not muscle. Do it before the ruck.'},
+      {k: 'lift', miss: liftPlan ? 1 - liftDone / liftPlan : 0, text: 'Missed strength sessions. Strength training is what keeps the weight you lose as fat, not muscle. Do it before the ruck.'},
       {k: 'water', miss: 1 - waterHits / n, text: 'Water goal is often missed. Fill your bottle twice before lunch and turn on drink reminders.'},
       {k: 'log', miss: 1 - fed.length / n, text: 'Some days have no food logged. Unlogged days hide what is slowing you down. Log as you eat, even rough guesses.'},
     ].sort((a, b) => b.miss - a.miss);
@@ -540,7 +565,7 @@ async function weeklyReview(btn){
   btn.disabled = true; reviewHTML = '<div class="muted small">Reviewing your last two weeks…</div>'; renderProgress();
   try {
     const res = await sample.json(
-      `You are a strict but encouraging fat-loss coach. Client: ${profile.sex === 'f' ? 'woman' : 'man'}, ${profile.heightCm} cm, goal ${profile.goalKg} kg, eats in ${profile.location || REGION_LABEL[profile.region]}, trains in a hotel with a ${profile.dbKg || 15} kg dumbbell and ${profile.vestKg} kg vest. Keeps 3 coffees a day (non-negotiable).\n` +
+      `You are a strict but encouraging fat-loss coach. Client: ${profile.sex === 'f' ? 'woman' : 'man'}, ${profile.heightCm} cm, goal ${profile.goalKg} kg, eats in ${profile.location || REGION_LABEL[profile.region]}, trains with ${Number(profile.dbKg) > 0 ? `a ${profile.dbKg} kg dumbbell` : 'bodyweight only'}${Number(profile.vestKg) > 0 ? ` and a ${profile.vestKg} kg vest` : ''}. ${coffeeCups() ? `Keeps ${coffeeCups()} coffees a day (non-negotiable).` : ''}\n` +
       `Their daily log, oldest first:\n${rows}\n\n` +
       `Give a short review: what is working, the 2 biggest problems with evidence from the log, and 3 specific actions for this week (name real foods they can buy). Be direct, no fluff, under 180 words total.\n` +
       `Reply with only JSON: {"working": string, "problems": [string, string], "actions": [string, string, string]}`, {modelTier: 'default'});
@@ -647,7 +672,7 @@ function budgetCard(date, v){
 function renderToday(){
   const date = today(), d = getDay(date), v = verdict(date);
   const [ctone, cline] = coachLine(v, d);
-  const foodBudget = v.t.kcal - 3*coffeeKcal();
+  const foodBudget = v.t.kcal - coffeeCups()*coffeeKcal();
   const pct = Math.min(100, v.tot.total / v.t.kcal * 100);
   const ppct = Math.min(100, v.tot.protein / v.t.protein * 100);
   const running = d.ruckStart ? Math.floor((Date.now() - d.ruckStart)/60000) : 0;
@@ -676,9 +701,9 @@ function renderToday(){
   </div>
 
   <div class="card">
-      <div class="label">Coffee · 3 a day, already budgeted</div>
-      <div class="cups">${[0,1,2].map(i => `<button class="cup ${d.coffee > i ? 'on':''}" data-cup="${i}" aria-label="Coffee ${i+1}">${CUP}</button>`).join('')}
-        ${d.coffee > 3 ? `<span class="pill bad">+${d.coffee-3} extra</span>` : ''}</div>
+      <div class="label">${coffeeCups() ? `Coffee · ${coffeeCups()} a day, already budgeted` : 'Coffee'}</div>
+      <div class="cups">${[...Array(coffeeCups()).keys()].map(i => `<button class="cup ${d.coffee > i ? 'on':''}" data-cup="${i}" aria-label="Coffee ${i+1}">${CUP}</button>`).join('')}
+        ${d.coffee > coffeeCups() ? `<span class="pill bad">+${d.coffee-coffeeCups()} extra</span>` : ''}</div>
       <div class="small muted">${esc(COFFEE[profile.coffeeType].label)} · ${coffeeKcal()} kcal each. ${coffeeKcal() >= 100 ? 'Switching to sugar-free sachets frees up about ' + (3*(coffeeKcal()-50)) + ' kcal a day.' : ''}</div>
       <div class="row"><button class="btn ghost" data-act="coffee-extra">+ extra cup</button>${d.coffee ? '<button class="btn ghost" data-act="coffee-undo">undo</button>':''}</div>
       <div class="label">Morning weight</div>
@@ -699,7 +724,7 @@ function renderToday(){
   </div>
 
   <div class="card" id="cardRuck">
-    <div class="spread"><h3>${v.rp.vest ? 'Ruck' : 'Recovery walk · no vest'}</h3><span class="num small muted">${d.ruckMin||0} / ${v.rp.min} min · ≈${Math.round((d.ruckMin||0) * ruckRate(v.t.w))} kcal burned</span></div>
+    <div class="spread"><h3>${v.rp.recovery ? 'Recovery walk · easy pace' : v.rp.vest ? 'Ruck' : 'Brisk walk'}</h3><span class="num small muted">${d.ruckMin||0} / ${v.rp.min} min · ≈${Math.round((d.ruckMin||0) * ruckRate(v.t.w))} kcal burned</span></div>
     <div class="bar"><i style="width:${Math.min(100,(d.ruckMin||0)/v.rp.min*100)}%"></i></div>
     <div class="row">
       ${d.ruckStart ? `<span class="timer" id="ruckClock">${elapsed(d.ruckStart)}</span><button class="btn primary" data-act="ruck-stop">Stop & log</button>`
@@ -710,8 +735,8 @@ function renderToday(){
   </div>
 
   <div class="card">
-    <div class="spread"><h3>${ls ? 'Dumbbell session ' + ls : 'No lifting today'}</h3><button class="btn" data-goto="train">${ls ? 'Open session' : 'See plan'}</button></div>
-    ${ls ? `<div class="small muted">${WORKOUTS[ls].map(x => (d.workoutDone||[]).includes(x) ? '✓ ' + EX[x].name : EX[x].name).map(esc).join(' · ')}</div>` : '<div class="small muted">Rest the muscles. 10 minutes of stretching after your ruck.</div>'}
+    <div class="spread"><h3>${ls ? liftName() + ' session ' + ls : 'No lifting today'}</h3><button class="btn" data-goto="train">${ls ? 'Open session' : 'See plan'}</button></div>
+    ${ls ? `<div class="small muted">${WORKOUTS_FOR()[ls].map(x => (d.workoutDone||[]).includes(x) ? '✓ ' + EX[x].name : EX[x].name).map(esc).join(' · ')}</div>` : '<div class="small muted">Rest the muscles. 10 minutes of stretching after your ruck.</div>'}
   </div>
 
   <div class="card">
@@ -732,28 +757,29 @@ function renderTrain(){
     <h2>This week</h2>
     <div class="week">${week.map(w => { const l = liftSession(w); const r = ruckBase(w);
       return `<div class="${w===date?'today':''}"><span class="muted">${DOW[parseYmd(w).getDay()]}</span><b>${l ? 'Lift ' + l : 'Rest'}</b><span class="num">${r.vest ? 'Ruck ' + r.min : 'Walk ' + r.min}</span></div>`; }).join('')}</div>
-    <div class="small muted">Lift Mon / Wed / Fri, alternating A and B. Ruck every day except Sunday, which is an easy walk without the vest.</div>
+    <div class="small muted">Lift Mon / Wed / Fri, alternating A and B. ${Number(profile.vestKg) > 0 ? 'Ruck every day except Sunday, which is an easy walk without the vest.' : 'Brisk walk every day; Sunday is an easy recovery walk.'}</div>
   </div>
 
   <div class="card">
-    <div class="spread"><h2>${ls ? 'Today: session ' + ls : 'Preview: session A'}</h2><span class="small muted">~40 min · ${profile.dbKg || 15} kg dumbbell</span></div>
+    <div class="spread"><h2>${ls ? 'Today: session ' + ls : 'Preview: session A'}</h2><span class="small muted">${Number(profile.dbKg) > 0 ? `~40 min · ${profile.dbKg} kg dumbbell` : '~30 min · no equipment'}</span></div>
     <div class="small"><b>Warm-up, 5 min:</b> 20 arm circles, 15 bodyweight squats, 10 hip hinges, 10 slow lunges, 30 s march in place.</div>
     <div class="small"><b>Rules:</b> rest 60–90 s on core work (plank, dead bug) and up to 2–3 min on heavy moves (squat, press, deadlift, row, lunges). Every set still gets done. When you can do the top of the rep range on all 3 sets with good form, put the vest on for that exercise (marked VEST) or slow the lowering to 4 seconds.</div>
-    ${WORKOUTS[sess].map(x => exCard(x, d, !!ls)).join('')}
+    ${WORKOUTS_FOR()[sess].map(x => exCard(x, d, !!ls)).join('')}
     <div class="row"><span class="timer" id="restClock">0:00</span><button class="btn" data-rest="60">Rest 60 s</button><button class="btn" data-rest="90">Rest 90 s</button><button class="btn" data-rest="150">Rest 2½ min</button><button class="btn ghost" data-rest="0">Stop</button></div>
   </div>
 
   <div class="card">
     <h2>Session ${ls === 'B' ? 'A' : 'B'} (next time)</h2>
-    ${WORKOUTS[ls === 'B' ? 'A' : 'B'].map(x => exCard(x, d, false)).join('')}
+    ${WORKOUTS_FOR()[ls === 'B' ? 'A' : 'B'].map(x => exCard(x, d, false)).join('')}
   </div>
 
   <div class="card">
-    <h2>Rucking with the vest</h2>
+    <h2>${Number(profile.vestKg) > 0 ? 'Rucking with the vest' : 'Daily brisk walk'}</h2>
     <ul class="small" style="margin:0;padding-left:18px;display:grid;gap:6px">
       <li><b>Today: ${rp.min} min ${rp.vest ? 'with vest' : 'without vest'}.</b> Week 1 is 45 min a day, week 2 is 50, week 3 onward is 60. That burns roughly ${Math.round(60*ruckRate(t.w))} kcal per hour at your weight with a ${profile.vestKg} kg vest.</li>
       <li><b>Pace:</b> brisk, about 5–6 km/h. You can talk in short sentences but would not want to sing. Do not run with the vest.</li>
-      <li><b>Vest weight:</b> start around 10% of body weight (7–8 kg). Your ${profile.vestKg} kg vest is ${Math.round(profile.vestKg / t.w * 100)}% of body weight. ${profile.vestKg / t.w > 0.15 ? 'That is heavy for daily rucking; remove some plates for the first two weeks.' : 'That is fine to work up to; if feet or knees ache in week 1, go without it for a few days.'}</li>
+      ${Number(profile.vestKg) > 0 ? '' : '<li><b>No vest needed:</b> a brisk walk works. If you get a weight vest later, add it in Setup and the walks become rucks.</li>'}
+      <li style="${Number(profile.vestKg) > 0 ? '' : 'display:none'}"><b>Vest weight:</b> start around 10% of body weight (7–8 kg). Your ${profile.vestKg} kg vest is ${Math.round(profile.vestKg / t.w * 100)}% of body weight. ${profile.vestKg / t.w > 0.15 ? 'That is heavy for daily rucking; remove some plates for the first two weeks.' : 'That is fine to work up to; if feet or knees ache in week 1, go without it for a few days.'}</li>
       <li><b>Splitting is fine:</b> 2 × 30 min counts the same as 60 min straight. Hotel stairs count too.</li>
       <li><b>Lift days:</b> lift first, ruck later in the day.</li>
       <li><b>Stop</b> for sharp pain in knees, back or feet (normal muscle tiredness is fine). Wear proper shoes, keep the vest snug and high on the chest.</li>
@@ -780,7 +806,7 @@ function activityCard(date){
 }
 function exCard(id, d, checkable){
   const e = EX[id], done = (d.workoutDone||[]).includes(id);
-  const q = encodeURIComponent(e.name.replace(/\(.*\)/,'') + ' dumbbell form');
+  const q = encodeURIComponent(e.name.replace(/\(.*\)/,'') + ' exercise form');
   return `<details class="ex"><summary>
       ${checkable ? `<input type="checkbox" class="chk" data-ex="${id}" ${done ? 'checked':''} aria-label="Done: ${esc(e.name)}">` : '<span></span>'}
       <span><b>${esc(e.name)}</b> ${e.vest ? '<span class="tag">vest</span>' : ''}<br><span class="small muted num">${esc(e.sets)}</span></span>
@@ -960,18 +986,23 @@ function renderSetup(){
       <label class="field"><span class="label">Calorie adjustment</span><select id="sAdj">${[0,-150,-300,150].map(a => `<option value="${a}" ${a===Number(profile.adjust)?'selected':''}>${a>0?'+':''}${a} kcal</option>`).join('')}</select></label>
       <label class="field"><span class="label">Drink reminders</span><select id="sRemind"><option value="0" ${!profile.waterRemind?'selected':''}>Off</option>${[45,60,90,120].map(m => `<option value="${m}" ${profile.waterRemind && Number(profile.remindEvery)===m?'selected':''}>Every ${m} min</option>`).join('')}</select></label>
       <label class="field"><span class="label">Awake from / until (hour)</span><span class="row" style="flex-wrap:nowrap"><input id="sWake" type="number" min="0" max="23" value="${profile.wakeHour}"><input id="sSleep" type="number" min="1" max="24" value="${profile.sleepHour}"></span></label>
+      <label class="field"><span class="label">Coffees per day</span><select id="sCups">${[0,1,2,3,4,5].map(n => `<option value="${n}" ${n===coffeeCups()?'selected':''}>${n}</option>`).join('')}</select></label>
       <label class="field"><span class="label">Strict penalties</span><select id="sPen"><option value="1" ${profile.penalties?'selected':''}>On: missed ruck or overeating adds ruck time</option><option value="0" ${!profile.penalties?'selected':''}>Off</option></select></label>
     </div>
     <div class="row"><button class="btn primary" type="submit">Save</button><span class="small muted" id="setupMsg"></span></div>
-    <div class="small muted">Current daily target: <b class="num">${t.kcal}</b> kcal, <b class="num">${t.protein}</b> g protein. Never below 1,500 kcal. When you reach your goal weight the target switches to maintenance automatically.</div>
+    <div class="small muted">Current daily target: <b class="num">${t.kcal}</b> kcal, <b class="num">${t.protein}</b> g protein. Never below ${profile.sex === 'f' ? '1,200' : '1,500'} kcal. When you reach your goal weight the target switches to maintenance automatically.</div>
   </form>
+  <div class="card">
+    <div class="spread"><h3>Start over</h3><button class="btn" data-act="onboard">Run first-time setup again</button></div>
+    <div class="small muted">Re-enter your details and rebuild your plan. Your logged history stays.</div>
+  </div>
   <div class="card">
     <h3>Ground rules</h3>
     <ul class="small" style="margin:0;padding-left:18px;display:grid;gap:4px">
       <li>Log food as you eat it. Unlogged food still counts.</li>
       <li>Protein in every meal. Rice is half a cup unless you trained hard and have budget left.</li>
       <li>No sugary drinks. Water, black or sugar-free coffee, unsweetened tea.</li>
-      <li>Three coffees a day stay. Their calories are reserved before food.</li>
+      ${coffeeCups() ? `<li>Your ${coffeeCups()} coffees a day stay. Their calories are counted when you tap a cup.</li>` : ''}
       <li>Weigh every morning, judge only the 7-day average.</li>
       <li>Sleep 7 hours. Short sleep makes the hunger worse the next day.</li>
       <li>Dizzy, faint, or sharp joint pain: stop, eat, and rest. Strict does not mean injured.</li>
@@ -1097,7 +1128,7 @@ document.addEventListener('submit', e => {
     const n = (id, d) => { const v = parseFloat($(id).value); return isFinite(v) ? v : d; };
     profile = {...profile, age:n('#sAge',profile.age), sex:$('#sSex').value, heightCm:n('#sH',profile.heightCm), startKg:n('#sStart',profile.startKg),
       goalKg:n('#sGoal',profile.goalKg), startDate:$('#sDate').value || profile.startDate, activity:Number($('#sAct').value), vestKg:n('#sVest',profile.vestKg), dbKg:n('#sDb',profile.dbKg || 15), stepGoal:Number($('#sSteps').value),
-      coffeeType:$('#sCoffee').value, region:$('#sRegion').value, adjust:Number($('#sAdj').value), penalties:$('#sPen').value === '1',
+      coffeeType:$('#sCoffee').value, coffeeCups:Number($('#sCups').value), region:$('#sRegion').value, adjust:Number($('#sAdj').value), penalties:$('#sPen').value === '1',
       waterRemind:$('#sRemind').value !== '0', remindEvery:$('#sRemind').value !== '0' ? Number($('#sRemind').value) : profile.remindEvery,
       wakeHour:n('#sWake',profile.wakeHour), sleepHour:n('#sSleep',profile.sleepHour)};
     if (profile.waterRemind) enableReminders();
@@ -1295,6 +1326,81 @@ async function photoEstimate(file){
   finally { const o = $('#estOut'); if (o) o.innerHTML = estHTML; }
 }
 
+
+/* ---------- first-time setup (new accounts, or "Run first-time setup again") ---------- */
+let hadLocal = false;
+try { hadLocal = !!localStorage.getItem('cut69'); } catch {}
+function showOnboarding(){
+  let o = $('#onboard');
+  if (!o) { o = document.createElement('div'); o.id = 'onboard'; o.className = 'auth'; document.body.appendChild(o); }
+  const pf = profile;
+  o.innerHTML = `<form class="box card" id="onboardForm">
+    <h1>Welcome to Cutline</h1>
+    <div class="small muted">A few questions to build your plan. You can change any of this later in Setup.</div>
+    <div class="fields">
+      <label class="field"><span class="label">Sex</span><select id="oSex"><option value="m" ${pf.sex!=='f'?'selected':''}>Male</option><option value="f" ${pf.sex==='f'?'selected':''}>Female</option></select></label>
+      <label class="field"><span class="label">Age</span><input id="oAge" type="number" min="18" max="90" required value="${hadOnboarded() ? pf.age : ''}"></label>
+      <label class="field"><span class="label">Height cm</span><input id="oH" type="number" min="120" max="230" required value="${hadOnboarded() ? pf.heightCm : ''}"></label>
+      <label class="field"><span class="label">Weight now kg</span><input id="oW" type="number" step="0.1" min="35" max="250" required value="${hadOnboarded() ? latestWeight(today()) : ''}"></label>
+      <label class="field"><span class="label">Goal weight kg</span><input id="oG" type="number" step="0.1" min="35" max="250" required value="${hadOnboarded() ? pf.goalKg : ''}"></label>
+    </div>
+    <div class="small muted" id="oHint">A healthy weight for your height appears here.</div>
+    <div class="fields">
+      <label class="field"><span class="label">Daily activity (outside workouts)</span><select id="oAct">${Object.entries(ACTIVITY).map(([k,l]) => `<option value="${k}" ${Number(k)===Number(pf.activity)?'selected':''}>${l}</option>`).join('')}</select></label>
+      <label class="field"><span class="label">Dumbbell</span><select id="oDb"><option value="0">None, bodyweight workouts</option>${[5,7.5,10,12.5,15,20,25].map(k => `<option value="${k}" ${hadOnboarded() && Number(pf.dbKg)===k?'selected':''}>${k} kg</option>`).join('')}</select></label>
+      <label class="field"><span class="label">Weight vest</span><select id="oVest"><option value="0">None, brisk walks</option>${[5,7.5,10,15,20].map(k => `<option value="${k}" ${hadOnboarded() && Number(pf.vestKg)===k?'selected':''}>${k} kg</option>`).join('')}</select></label>
+      <label class="field"><span class="label">Coffees per day</span><select id="oCups">${[0,1,2,3,4,5].map(n => `<option value="${n}" ${n===(hadOnboarded() ? coffeeCups() : 2)?'selected':''}>${n}</option>`).join('')}</select></label>
+      <label class="field"><span class="label">Your usual coffee</span><select id="oCoffee">${Object.entries(COFFEE).map(([k,c]) => `<option value="${k}" ${k===(hadOnboarded() ? pf.coffeeType : 'black')?'selected':''}>${c.label} (${c.kcal} kcal)</option>`).join('')}</select></label>
+      <label class="field"><span class="label">Where you eat</span><select id="oRegion">${Object.keys(FOODS).map(k => `<option value="${k}" ${k===pf.region?'selected':''}>${REGION_LABEL[k]}</option>`).join('')}</select></label>
+      <label class="field"><span class="label">Coaching style</span><select id="oPen"><option value="1">Strict: missed workouts or overeating add walk time</option><option value="0" ${hadOnboarded() && !pf.penalties ? 'selected' : ''}>Relaxed: no penalties</option></select></label>
+    </div>
+    <div class="fields">
+      <label class="field"><span class="label">Reward milestone (optional)</span><input id="oMName" placeholder="e.g. New running shoes" value="${hadOnboarded() && pf.milestoneKg ? esc(pf.milestoneName) : ''}"></label>
+      <label class="field"><span class="label">…unlocked at kg</span><input id="oMKg" type="number" step="0.1" value="${hadOnboarded() && pf.milestoneKg ? pf.milestoneKg : ''}"></label>
+    </div>
+    <div class="small" id="oErr" style="color:var(--bad)"></div>
+    <div class="row"><button class="btn primary" type="submit">Build my plan</button>${hadOnboarded() ? '<button class="btn ghost" type="button" data-act="onboard-cancel">Cancel</button>' : ''}</div>
+    <div class="note">Cutline is for healthy adults. If you are pregnant, under 18, or have a medical condition, check with a doctor before cutting calories.</div>
+  </form>`;
+  o.hidden = false;
+  onboardHint();
+}
+const hadOnboarded = () => !!profile.onboarded;
+function onboardHint(){
+  const h = parseFloat(($('#oH') || {}).value), el = $('#oHint');
+  if (!el) return;
+  if (!(h > 100)) { el.textContent = 'A healthy weight for your height appears here.'; return; }
+  const m = h / 100, lo = 18.5 * m * m, hi = 24.9 * m * m;
+  el.textContent = `Healthy weight range for ${h} cm: about ${lo.toFixed(0)}–${hi.toFixed(0)} kg. A good first goal is 5–10% below your current weight.`;
+}
+document.addEventListener('input', e => { if (e.target.id === 'oH') onboardHint(); });
+document.addEventListener('submit', e => {
+  if (e.target.id !== 'onboardForm') return;
+  e.preventDefault();
+  const n = id => parseFloat($(id).value);
+  const age = n('#oAge'), h = n('#oH'), w = n('#oW'), g = n('#oG'), err = $('#oErr');
+  if (!(age >= 18)) { err.textContent = 'Cutline is built for adults (18+).'; return; }
+  const bmiGoal = g / (h / 100) ** 2;
+  if (bmiGoal < 18.5) { err.textContent = `That goal is below the healthy range for your height (under ${(18.5 * (h/100) ** 2).toFixed(0)} kg). Pick a higher goal.`; return; }
+  const mk = n('#oMKg');
+  profile = {...profile, onboarded: true, sex: $('#oSex').value, age, heightCm: h, startKg: w, goalKg: g, startDate: today(),
+    activity: Number($('#oAct').value), dbKg: Number($('#oDb').value), vestKg: Number($('#oVest').value),
+    coffeeCups: Number($('#oCups').value), coffeeType: $('#oCoffee').value, region: $('#oRegion').value,
+    penalties: $('#oPen').value === '1', adjust: 0, stepGoal: profile.stepGoal ?? 8000,
+    milestoneKg: mk > 0 ? mk : 0, milestoneName: ($('#oMName').value || '').trim() || 'Milestone'};
+  ensureDay(today()).weight = Math.round(w * 10) / 10;
+  saveDay(today());
+  saveProfile();
+  $('#onboard').hidden = true;
+  activeTab = 'today'; showTab(); render();
+});
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]');
+  if (!b) return;
+  if (b.dataset.act === 'onboard') showOnboarding();
+  if (b.dataset.act === 'onboard-cancel') $('#onboard').hidden = true;
+});
+
 /* ---------- auth + boot ---------- */
 function cfg(){
   const c = window.CUT69_CONFIG || {};
@@ -1317,10 +1423,12 @@ async function pull(){
   if (p.error || d.error) { syncError = (p.error || d.error).message; setSync(); return; }
   pullHealth();
   if (!p.data && !d.data.length) {
-    // brand-new account: upload whatever this device already has
+    // brand-new account: upload whatever this device already has, or run first-time setup on a clean device
+    if (!Object.keys(days).length && !profile.onboarded) { showOnboarding(); pullHealth(); return; }
     markDirty('profile'); Object.keys(days).forEach(k => markDirty('d:'+k)); pullHealth(); return;
   }
-  if (p.data && !dirty.has('profile')) profile = {...DEFAULT_PROFILE, ...p.data.data};
+  // an existing account counts as set up, even if it predates first-time setup
+  if (p.data && !dirty.has('profile')) profile = {...DEFAULT_PROFILE, onboarded: true, ...p.data.data};
   const remote = {};
   d.data.forEach(r => { remote[r.date] = r.data; });
   Object.keys(days).forEach(k => { if (dirty.has('d:'+k)) remote[k] = days[k]; });
@@ -1397,7 +1505,7 @@ document.addEventListener('submit', async e => {
   }
 });
 document.addEventListener('click', e => {
-  if (e.target.id === 'localOnly') { try { localStorage.setItem('cut69localOnly', '1'); } catch {} showAuth(false); }
+  if (e.target.id === 'localOnly') { try { localStorage.setItem('cut69localOnly', '1'); } catch {} showAuth(false); if (!hadLocal) showOnboarding(); }
 });
 
 sample = getKey() ? {json: aiJson} : null;
