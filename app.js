@@ -355,6 +355,7 @@ function dayTotals(d){
 }
 const ruckRate = w => (5.5 - 1) * 3.5 * (w + Number(profile.vestKg||0)) / 200; // net kcal/min, loaded brisk walk
 function ruckBase(date){
+  if (getDay(date).minDay) return {min:15, vest:false, minimum:true};
   const wk = Math.floor(Math.max(0, diffDays(profile.startDate, date)) / 7);
   if (parseYmd(date).getDay() === 0) return {min:30, vest:false, recovery:true};
   return {min:[45,50,60][Math.min(wk,2)], vest: Number(profile.vestKg) > 0};
@@ -362,7 +363,7 @@ function ruckBase(date){
 function ruckPlan(date){
   const p = {...ruckBase(date), why:[]};
   const y = addDays(date, -1);
-  if (profile.penalties && y >= profile.startDate && date <= today()) {
+  if (profile.penalties && !getDay(date).minDay && y >= profile.startDate && date <= today()) {
     const yd = getDay(y);
     if (yd.foods.length) {
       const over = dayTotals(yd).total - targets(y).kcal;
@@ -426,11 +427,11 @@ function verdict(date){
   const items = [
     {k:'kcal', label:`Eat ≤ ${t.kcal} kcal`, val:`${tot.total}`, s: tot.total > t.kcal + 50 ? 'bad' : (d.foods.length ? (isToday ? 'open' : 'ok') : st(false,true))},
     {k:'protein', label:`Protein ≥ ${t.protein} g`, val:`${tot.protein} g`, s: st(tot.protein >= t.protein*0.85, true)},
-    {k:'ruck', label: rp.recovery ? `Recovery walk ${rp.min} min, easy pace` : rp.vest ? `Ruck ${rp.min} min with vest` : `Brisk walk ${rp.min} min`, val:`${d.ruckMin||0} min`, s: st((d.ruckMin||0) >= rp.min, true)},
-    ls ? {k:'lift', label:`${liftName()} session ${ls}`, val:`${(d.workoutDone||[]).filter(x=>WORKOUTS_FOR()[ls].includes(x)).length}/5`, s: st(WORKOUTS_FOR()[ls].every(x => (d.workoutDone||[]).includes(x)), true)}
-       : {k:'lift', label:'No lifting today — 10 min stretching', val:'rest', s:'ok'},
+    {k:'ruck', label: rp.minimum ? `Easy walk ${rp.min} min (minimum day)` : rp.recovery ? `Recovery walk ${rp.min} min, easy pace` : rp.vest ? `Ruck ${rp.min} min with vest` : `Brisk walk ${rp.min} min`, val:`${d.ruckMin||0} min`, s: st((d.ruckMin||0) >= rp.min, true)},
+    ls && !d.minDay ? {k:'lift', label:`${liftName()} session ${ls}`, val:`${(d.workoutDone||[]).filter(x=>WORKOUTS_FOR()[ls].includes(x)).length}/5`, s: st(WORKOUTS_FOR()[ls].every(x => (d.workoutDone||[]).includes(x)), true)}
+       : {k:'lift', label: d.minDay && ls ? 'Strength: rest today (minimum day)' : 'No lifting today — 10 min stretching', val:'rest', s:'ok'},
     {k:'weigh', label:'Morning weigh-in', val: d.weight ? d.weight.toFixed(1)+' kg' : '—', s: st(!!d.weight, true)},
-    ...(healthToken && stepGoal() && (isToday || health[date] || d.extraSteps) ? [{k:'steps', label:`Walk ${stepGoal().toLocaleString()} steps`, val: stepsFor(date).toLocaleString(), s: st(stepsFor(date) >= stepGoal(), true)}] : []),
+    ...(healthToken && stepGoal() && !d.minDay && (isToday || health[date] || d.extraSteps) ? [{k:'steps', label:`Walk ${stepGoal().toLocaleString()} steps`, val: stepsFor(date).toLocaleString(), s: st(stepsFor(date) >= stepGoal(), true)}] : []),
     {k:'water', label:`Drink ${(waterGoal(date)/1000).toFixed(1)} L water`, val:`${((d.water||0)/1000).toFixed(2)} L`, s: st((d.water||0) >= waterGoal(date), true)},
   ];
   // a finished day with food logged under budget passes kcal
@@ -592,11 +593,19 @@ function render0(){
   renderToday(); renderTrain(); renderFood(); renderProgress(); if (!setupDirty) renderSetup(); setSync();
 }
 
+// minimum day: for long shifts, short sleep or feeling run down. The essentials still count as a win.
+function minDayRow(date, d){
+  const monday = addDays(date, -((parseYmd(date).getDay() + 6) % 7));
+  const used = [...Array(7)].map((_, i) => addDays(monday, i)).filter(x => x <= date && getDay(x).minDay).length;
+  return `<div class="row"><button class="btn ${d.minDay ? 'primary' : ''}" data-act="minday">${d.minDay ? 'Back to the full plan' : 'Make today a minimum day'}</button>
+    <span class="small muted">${d.minDay ? 'Today: calories, protein, a 15-min easy walk, weigh-in and water. No lifting, no ruck.' : `For long shifts or short sleep. Used ${used} this week${used >= 2 ? ' (more than 2 a week slows your progress)' : ''}.`}</span></div>`;
+}
 function coachLine(v, d){
   const h = new Date().getHours();
   const left = v.t.kcal - v.tot.total, pLeft = v.t.protein - v.tot.protein;
   if (v.t.atGoal) return ['ok', `You are at ${profile.goalKg} kg. Target is now maintenance (${v.t.kcal} kcal). Keep rucking, keep logging.`];
   if (left < -50) return ['bad', `Over by ${-left} kcal. Kitchen is closed for today.${profile.penalties ? ' Tomorrow\'s ruck gets +15 min.' : ''}`];
+  if (d.minDay) return ['ok', `Minimum day. Hit your calories, ${Math.max(0, pLeft)} g more protein, a ${v.rp.min}-minute easy walk and your water, then sleep. That counts as a full win.`];
   const avg = avgWeight(today()), dayN = diffDays(profile.startDate, today());
   if (dayN >= 10 && avg && avg - planWeight(today()) > 0.6) return ['bad', `7-day average ${avg.toFixed(1)} kg is ${(avg - planWeight(today())).toFixed(1)} kg behind plan. Tighten up: cut 150 kcal (Setup) and stop guessing portions.`];
   if (v.rp.min > (d.ruckMin||0) && h >= 18) return ['bad', v.rp.vest
@@ -690,6 +699,7 @@ function renderToday(){
       <span class="pill ${status[0]}"><span class="dot"></span>${status[1]}</span></div>
     <ul class="orders">${v.items.map(i => `<li data-jump="${i.k}" role="button" tabindex="0"><span class="mark ${i.s}">${MARK[i.s]}</span><span>${esc(i.label)}</span><span class="num small muted">${esc(i.val)} ›</span></li>`).join('')}</ul>
     <div class="small muted">Boxes tick themselves when you log. Tap an order to go to where you log it.</div>
+    ${minDayRow(date, d)}
     ${v.rp.why.length ? `<div class="small" style="color:var(--bad)">${v.rp.why.map(esc).join(' · ')}</div>` : ''}
     <div class="coach ${ctone}">${esc(cline)}</div>
     <div class="small muted">Streak: <b class="num">${streak()}</b> day(s) fully on plan.</div>
@@ -724,7 +734,7 @@ function renderToday(){
   </div>
 
   <div class="card" id="cardRuck">
-    <div class="spread"><h3>${v.rp.recovery ? 'Recovery walk · easy pace' : v.rp.vest ? 'Ruck' : 'Brisk walk'}</h3><span class="num small muted">${d.ruckMin||0} / ${v.rp.min} min · ≈${Math.round((d.ruckMin||0) * ruckRate(v.t.w))} kcal burned</span></div>
+    <div class="spread"><h3>${v.rp.minimum ? 'Easy walk · minimum day' : v.rp.recovery ? 'Recovery walk · easy pace' : v.rp.vest ? 'Ruck' : 'Brisk walk'}</h3><span class="num small muted">${d.ruckMin||0} / ${v.rp.min} min · ≈${Math.round((d.ruckMin||0) * ruckRate(v.t.w))} kcal burned</span></div>
     <div class="bar"><i style="width:${Math.min(100,(d.ruckMin||0)/v.rp.min*100)}%"></i></div>
     <div class="row">
       ${d.ruckStart ? `<span class="timer" id="ruckClock">${elapsed(d.ruckStart)}</span><button class="btn primary" data-act="ruck-stop">Stop & log</button>`
@@ -1088,6 +1098,7 @@ document.addEventListener('click', async e => {
   if (act === 'ruck-start') { ensureDay(date).ruckStart = Date.now(); saveDay(date); }
   if (act === 'ruck-stop') { const d = ensureDay(date); d.ruckMin = (d.ruckMin||0) + Math.max(1, Math.round((Date.now()-d.ruckStart)/60000)); d.ruckStart = null; saveDay(date); }
   if (act === 'suggest') suggest(b);
+  if (act === 'minday') { const d = ensureDay(date); d.minDay = !d.minDay; saveDay(date); }
   if (act === 'review') weeklyReview(b);
   if (b.dataset.copy) {
     try { await navigator.clipboard.writeText(b.dataset.copy); const t = b.textContent; b.textContent = 'Copied'; setTimeout(() => { b.textContent = t; }, 1500); }
