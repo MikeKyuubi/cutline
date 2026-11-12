@@ -505,6 +505,14 @@ function insights(){
     } else out.push({tone: 'bad', icon: 'Pace', text: `No downward trend over the last ${tr.n} weigh-ins yet. If this holds for 2 full weeks, cut 150 kcal in Setup.`});
   } else out.push({tone: '', icon: 'Pace', text: 'Your real pace and goal date appear after about 10 days of weigh-ins. Before that, water swings are bigger than fat loss, so any estimate would mislead you.'});
 
+  const rc = recovery(t);
+  if (rc.sleep || rc.rhr) {
+    const bits = [];
+    if (rc.sleep) bits.push(`${rc.sleep.toFixed(1)} h sleep${rc.sleep < 6 ? ' (short: expect more hunger today, keep protein high)' : ''}`);
+    if (rc.rhr) bits.push(rc.base ? `resting HR ${rc.rhr} bpm vs usual ${Math.round(rc.base)}${rc.rhrUp >= 5 ? ' (elevated: under-recovered or getting sick)' : ''}` : `resting HR ${rc.rhr} bpm (baseline after 3 days)`);
+    out.push({tone: rc.flags.length ? 'bad' : 'ok', icon: 'Recovery', text: bits.join(' · ') + '.'});
+  }
+
   // 2. yesterday's report card
   if (y >= profile.startDate) {
     const v = verdict(y), d = getDay(y), bits = [];
@@ -692,6 +700,7 @@ function renderToday(){
   let notifState = 'unsupported';
   try { if ('Notification' in window) notifState = Notification.permission; } catch {}
   $('#tab-today').innerHTML = `
+  ${(() => { const r = recovery(date); return r.flags.length && !d.minDay ? `<div class="coach bad">Your watch shows ${esc(r.flags.join(' and '))}. Consider a minimum day: skip the ruck and heavy lifting, keep calories and protein. <button class="btn" data-act="minday" style="margin-left:6px">Make today a minimum day</button></div>` : ''; })()}
   ${budgetCard(date, v)}
   ${waterDue() ? `<div class="coach bad">Drink water now: one glass (250 ml). ${sinceDrink == null ? 'Nothing logged yet today.' : `Last glass ${sinceDrink} min ago.`} <button class="btn" data-water="250" style="margin-left:6px">Done +250 ml</button></div>` : ''}
   <div class="card">
@@ -796,6 +805,20 @@ function renderTrain(){
     </ul>
   </div>`;
 }
+// watch recovery signals: resting heart rate vs the last week, and last night's sleep
+function rhrBaseline(date){
+  const v = [...Array(7)].map((_, i) => health[addDays(date, -1 - i)]).filter(h => h && +h.resting_hr > 0).map(h => +h.resting_hr);
+  return v.length >= 3 ? v.reduce((a, b) => a + b, 0) / v.length : null;
+}
+function recovery(date){
+  const h = health[date] || {}, base = rhrBaseline(date);
+  const rhr = +h.resting_hr || null, sleep = +h.sleep_h || null;
+  const rhrUp = rhr && base ? rhr - base : null;
+  const flags = [];
+  if (sleep && sleep < 5.5) flags.push(`only ${sleep.toFixed(1)} h of sleep last night`);
+  if (rhrUp != null && rhrUp >= 5) flags.push(`resting heart rate ${rhr} bpm, ${Math.round(rhrUp)} above your usual`);
+  return {rhr, sleep, base, rhrUp, flags};
+}
 function activityCard(date){
   const h = health[date];
   if (!healthToken) return `<div class="card"><div class="spread"><h3>Activity</h3><button class="btn" data-goto="setup">Connect Apple Health</button></div><div class="small muted">Pull steps, distance, active calories and weight from your iPhone automatically.</div></div>`;
@@ -811,8 +834,19 @@ function activityCard(date){
     <div class="spread"><span class="big num">${steps.toLocaleString()}</span><span class="small muted num">/ ${goal.toLocaleString()} steps</span></div>
     <div class="bar"><i style="width:${Math.min(100, steps / goal * 100)}%"></i></div>
     <div class="small muted num">${hh.distance_km != null ? Number(hh.distance_km).toFixed(1) + ' km · ' : ''}${hh.active_kcal != null ? Math.round(hh.active_kcal) + ' active kcal (not added to your food budget)' : ''}${hh.weight_kg ? ' · Health weight ' + Number(hh.weight_kg).toFixed(1) + ' kg' : ''}</div>
+    ${watchRow(date)}
     ${manual}
   </div>`;
+}
+function watchRow(date){
+  const r = recovery(date), h = health[date] || {}, d = getDay(date), wm = +h.workout_min || 0;
+  const bits = [];
+  if (r.sleep) bits.push(`Sleep ${r.sleep.toFixed(1)} h`);
+  if (r.rhr) bits.push(`Resting HR ${r.rhr} bpm${r.base ? ` (usual ${Math.round(r.base)})` : ''}`);
+  if (wm) bits.push(`Watch walks/hikes ${wm} min`);
+  if (!bits.length) return '';
+  return `<div class="small num">${bits.join(' · ')}</div>
+    ${wm > (d.ruckMin || 0) ? `<div class="row"><button class="btn" data-act="usewatch" data-min="${wm}">Use watch time for the ruck: ${wm} min</button></div>` : ''}`;
 }
 function exCard(id, d, checkable){
   const e = EX[id], done = (d.workoutDone||[]).includes(id);
@@ -1041,6 +1075,7 @@ function renderSetup(){
         <li>Add <b>Format Date</b>: Current Date, Date Format <b>Custom</b>, <code>yyyy-MM-dd</code>.</li>
         <li>Add <b>Get Contents of URL</b>: paste the URL. Method <b>POST</b>. No headers needed (the key is already in the URL). Request Body <b>JSON</b>, all fields type <b>Text</b>: <code>p_token</code> = your link code, <code>p_date</code> = Formatted Date, <code>p_steps</code> = the steps Sum, <code>p_distance_km</code> = the distance Sum, <code>p_active_kcal</code> = the energy Sum, <code>p_weight_kg</code> = the weight sample.</li>
         <li>Run it once and tap <b>Allow</b> for Health access. Today's steps should appear in this app within seconds.</li>
+        <li><b>Watch extras</b> (after the step above, so a missing value never blocks the main sync): add <b>Find Health Samples</b> Resting Heart Rate (last 1 day, latest first, limit 1), Sleep (last 1 day, value is not Awake / In Bed) → Sum, and Walking/Hiking workouts (today) → Sum of duration; then a second <b>Get Contents of URL</b> with <code>p_token</code>, <code>p_date</code>, <code>p_resting_hr</code>, <code>p_sleep</code>, <code>p_workout_min</code>.</li>
         <li>Make it automatic: <b>Automation</b> → <b>+</b> → <b>Time of Day</b> (e.g. 12:00, daily) → <b>Run Immediately</b> → action <b>Run Shortcut: Cutline Health</b>. Add more for 18:00 and 21:30.</li>
       </ol>
       <div class="small muted">If the reply is "400 Bad Request", delete every header in the action and use the URL from Copy URL, which already contains the key.</div></details>
@@ -1098,6 +1133,7 @@ document.addEventListener('click', async e => {
   if (act === 'ruck-start') { ensureDay(date).ruckStart = Date.now(); saveDay(date); }
   if (act === 'ruck-stop') { const d = ensureDay(date); d.ruckMin = (d.ruckMin||0) + Math.max(1, Math.round((Date.now()-d.ruckStart)/60000)); d.ruckStart = null; saveDay(date); }
   if (act === 'suggest') suggest(b);
+  if (act === 'usewatch') { const d = ensureDay(date); d.ruckMin = Math.max(d.ruckMin || 0, Number(b.dataset.min) || 0); saveDay(date); }
   if (act === 'minday') { const d = ensureDay(date); d.minDay = !d.minDay; saveDay(date); }
   if (act === 'review') weeklyReview(b);
   if (b.dataset.copy) {
