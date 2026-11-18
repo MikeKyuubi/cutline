@@ -219,10 +219,36 @@ Object.assign(EX, {
     steps:['Take a long step forward and stay in that stance.','Lower the back knee straight down toward the floor.','Front shin stays close to vertical.','Push through the front heel to rise. Finish one leg, then switch.'],
     cue:'Most of your weight on the front leg.',miss:'Steps too short, so the front knee shoots forward.'},
 });
-const WORKOUTS_DB = {A:['goblet','floorpress','row','revlunge','plank'], B:['rdl','pushup','ohp','splitsq','deadbug']};
+Object.assign(EX, {
+  suitcase:{name:'Suitcase carry',sets:'3 × 40 s per side',
+    steps:['Hold the dumbbell at your side like a suitcase, arm straight.','Stand tall: shoulders level, ribs down, do not lean toward the weight.','Walk slowly up and down the room or corridor for 40 seconds.','Switch hands and repeat.'],
+    cue:'Your trunk fights the sideways pull. That is the exercise.',miss:'Leaning away from the weight, shrugging the loaded shoulder.'},
+  thruster:{name:'Goblet thruster',sets:'3 × 8',
+    steps:['Hold the dumbbell at your chest like a goblet squat.','Squat down to parallel.','Drive up hard and, as you stand, press the dumbbell overhead with both hands.','Lower it back to your chest under control, then go into the next squat.'],
+    cue:'One smooth motion: the legs start the press.',miss:'Pressing only with the arms, letting the lower back arch at the top.'},
+  slrdl:{name:'Single-leg Romanian deadlift',sets:'3 × 8 per leg',
+    steps:['Hold the dumbbell in the hand opposite your standing leg.','Hinge at the hip and let the free leg float straight back.','Lower until your body is nearly parallel to the floor, back flat.','Drive the standing hip forward to stand. Hold a wall with your free hand if balance is shaky.'],
+    cue:'Hips stay square to the floor.',miss:'Rounding the back, the free hip rotating open.'},
+  pullover:{name:'Floor pullover',sets:'3 × 10',
+    steps:['Lie on your back, knees bent, holding one end of the dumbbell with both hands above your chest.','Keep a slight bend in the elbows and lower the weight back over your head toward the floor.','Stop when you feel a stretch in your lats and chest, or when it lightly touches the floor.','Pull it back over your chest.'],
+    cue:'Arms move like a lever from the shoulder; elbows stay the same angle.',miss:'Bending the elbows into a triceps press, arching the lower back.'},
+  stepup:{name:'Step-up',sets:'3 × 8 per leg',
+    steps:['Use a stair step or a solid box (not a hotel chair with wheels).','Hold the dumbbell at your chest or at your side.','Put one whole foot on the step and stand up through that heel.','Step down slowly with control. Finish one leg, then switch.'],
+    cue:'Push through the top leg; do not bounce off the bottom foot.',miss:'Pushing off the floor leg, knee caving in.'},
+  calfraise:{name:'Calf raise',sets:'3 × 15',
+    steps:['Stand on the edge of a step, holding the dumbbell at your side and a wall or rail with the other hand.','Let your heels drop below the step.','Rise as high as you can on your toes and pause for 1 second.','Lower slowly. Switch the dumbbell hand each set.'],
+    cue:'Full range: deep stretch, full squeeze.',miss:'Bouncing, half reps.'},
+  sideplank:{name:'Side plank',sets:'3 × 30 s per side',
+    steps:['Lie on your side, elbow under your shoulder, feet stacked.','Lift your hips until your body is a straight line.','Hold, breathing slowly.','Switch sides.'],
+    cue:'Push the floor away with your forearm.',miss:'Hips sagging toward the floor.'},
+});
+// heavy adjustable dumbbell (20 kg and up): three full-body sessions, otherwise the original A/B pair
+const WORKOUTS_HEAVY = {A:['goblet','floorpress','row','revlunge','suitcase','plank'], B:['rdl','pushup','ohp','splitsq','calfraise','deadbug'], C:['thruster','slrdl','pullover','stepup','row','sideplank']};
+const WORKOUTS_LIGHT = {A:['goblet','floorpress','row','revlunge','plank'], B:['rdl','pushup','ohp','splitsq','deadbug']};
 const WORKOUTS_BW = {A:['bwsquat','pushupbw','bridge','superman','plank'], B:['bwsplit','pushupbw','wallsit','superman','deadbug']};
 // each person's sessions follow their equipment
-const WORKOUTS_FOR = () => Number(profile.dbKg) > 0 ? WORKOUTS_DB : WORKOUTS_BW;
+const WORKOUTS_FOR = () => Number(profile.dbKg) >= 20 ? WORKOUTS_HEAVY : Number(profile.dbKg) > 0 ? WORKOUTS_LIGHT : WORKOUTS_BW;
+const SESSIONS = () => Object.keys(WORKOUTS_FOR());
 const liftName = () => Number(profile.dbKg) > 0 ? 'Dumbbell' : 'Bodyweight';
 const coffeeCups = () => Number(profile.coffeeCups ?? 3);
 const LIFT_DAYS = [1,3,5]; // Mon Wed Fri
@@ -380,7 +406,7 @@ function liftSession(date){
   if (!LIFT_DAYS.includes(dow)) return null;
   let n = 0;
   for (let d = profile.startDate; d < date; d = addDays(d,1)) if (LIFT_DAYS.includes(parseYmd(d).getDay())) n++;
-  return n % 2 ? 'B' : 'A';
+  const ss = SESSIONS(); return ss[n % ss.length];
 }
 function waterGoal(date){
   const base = Math.round(targets(date).w * 35 / 250) * 250;
@@ -428,7 +454,7 @@ function verdict(date){
     {k:'kcal', label:`Eat ≤ ${t.kcal} kcal`, val:`${tot.total}`, s: tot.total > t.kcal + 50 ? 'bad' : (d.foods.length ? (isToday ? 'open' : 'ok') : st(false,true))},
     {k:'protein', label:`Protein ≥ ${t.protein} g`, val:`${tot.protein} g`, s: st(tot.protein >= t.protein*0.85, true)},
     {k:'ruck', label: rp.minimum ? `Easy walk ${rp.min} min (minimum day)` : rp.recovery ? `Recovery walk ${rp.min} min, easy pace` : rp.vest ? `Ruck ${rp.min} min with vest` : `Brisk walk ${rp.min} min`, val:`${d.ruckMin||0} min`, s: st((d.ruckMin||0) >= rp.min, true)},
-    ls && !d.minDay ? {k:'lift', label:`${liftName()} session ${ls}`, val:`${(d.workoutDone||[]).filter(x=>WORKOUTS_FOR()[ls].includes(x)).length}/5`, s: st(WORKOUTS_FOR()[ls].every(x => (d.workoutDone||[]).includes(x)), true)}
+    ls && !d.minDay ? {k:'lift', label:`${liftName()} session ${ls}`, val:`${(d.workoutDone||[]).filter(x=>WORKOUTS_FOR()[ls].includes(x)).length}/${WORKOUTS_FOR()[ls].length}`, s: st(WORKOUTS_FOR()[ls].every(x => (d.workoutDone||[]).includes(x)), true)}
        : {k:'lift', label: d.minDay && ls ? 'Strength: rest today (minimum day)' : 'No lifting today — 10 min stretching', val:'rest', s:'ok'},
     {k:'weigh', label:'Morning weigh-in', val: d.weight ? d.weight.toFixed(1)+' kg' : '—', s: st(!!d.weight, true)},
     ...(healthToken && stepGoal() && !d.minDay && (isToday || health[date] || d.extraSteps) ? [{k:'steps', label:`Walk ${stepGoal().toLocaleString()} steps`, val: stepsFor(date).toLocaleString(), s: st(stepsFor(date) >= stepGoal(), true)}] : []),
@@ -771,16 +797,18 @@ function renderTrain(){
   const monday = addDays(date, -((parseYmd(date).getDay()+6)%7));
   const week = [...Array(7)].map((_,i) => addDays(monday, i));
   const sess = ls || 'A';
+  const ssList = SESSIONS(), nextSess = ssList[(ssList.indexOf(ls || 'A') + 1) % ssList.length];
   $('#tab-train').innerHTML = `
   <div class="card">
     <h2>This week</h2>
     <div class="week">${week.map(w => { const l = liftSession(w); const r = ruckBase(w);
       return `<div class="${w===date?'today':''}"><span class="muted">${DOW[parseYmd(w).getDay()]}</span><b>${l ? 'Lift ' + l : 'Rest'}</b><span class="num">${r.vest ? 'Ruck ' + r.min : 'Walk ' + r.min}</span></div>`; }).join('')}</div>
-    <div class="small muted">Lift Mon / Wed / Fri, alternating A and B. ${Number(profile.vestKg) > 0 ? 'Ruck every day except Sunday, which is an easy walk without the vest.' : 'Brisk walk every day; Sunday is an easy recovery walk.'}</div>
+    <div class="small muted">Lift Mon / Wed / Fri, rotating ${SESSIONS().join(' → ')}. ${Number(profile.vestKg) > 0 ? 'Ruck every day except Sunday, which is an easy walk without the vest.' : 'Brisk walk every day; Sunday is an easy recovery walk.'}</div>
   </div>
 
   <div class="card">
     <div class="spread"><h2>${ls ? 'Today: session ' + ls : 'Preview: session A'}</h2><span class="small muted">${Number(profile.dbKg) > 0 ? `~40 min · ${profile.dbKg} kg dumbbell` : '~30 min · no equipment'}</span></div>
+    ${Number(profile.dbKg) >= 20 ? '<div class="small"><b>Adjustable dumbbell safety:</b> change the weight only with the dumbbell sitting in its cradle, check the dial clicks into place on both ends, and never drop or swing it. Dial dumbbells are not built for that.</div>' : ''}
     <div class="small"><b>Warm-up, 5 min:</b> 20 arm circles, 15 bodyweight squats, 10 hip hinges, 10 slow lunges, 30 s march in place.</div>
     <div class="small"><b>Rules:</b> rest 60–90 s on core work (plank, dead bug) and up to 2–3 min on heavy moves (squat, press, deadlift, row, lunges). Every set still gets done. When you can do the top of the rep range on all 3 sets with good form, put the vest on for that exercise (marked VEST) or slow the lowering to 4 seconds.</div>
     ${WORKOUTS_FOR()[sess].map(x => exCard(x, d, !!ls)).join('')}
@@ -788,8 +816,8 @@ function renderTrain(){
   </div>
 
   <div class="card">
-    <h2>Session ${ls === 'B' ? 'A' : 'B'} (next time)</h2>
-    ${WORKOUTS_FOR()[ls === 'B' ? 'A' : 'B'].map(x => exCard(x, d, false)).join('')}
+    <h2>Session ${nextSess} (next time)</h2>
+    ${WORKOUTS_FOR()[nextSess].map(x => exCard(x, d, false)).join('')}
   </div>
 
   <div class="card">
@@ -848,14 +876,24 @@ function watchRow(date){
   return `<div class="small num">${bits.join(' · ')}</div>
     ${wm > (d.ruckMin || 0) ? `<div class="row"><button class="btn" data-act="usewatch" data-min="${wm}">Use watch time for the ruck: ${wm} min</button></div>` : ''}`;
 }
+// starting weights for one dumbbell; the person adjusts them, and the app remembers
+const START_KG = {goblet:20, floorpress:15, row:20, revlunge:12.5, suitcase:25, rdl:25, ohp:10, splitsq:12.5, calfraise:20,
+  thruster:12.5, slrdl:15, pullover:15, stepup:12.5};
+function exKg(id){
+  if (!(id in START_KG) || !(Number(profile.dbKg) > 0)) return null;
+  const v = (profile.exKg || {})[id];
+  return Math.min(Number(profile.dbKg), v != null ? Number(v) : START_KG[id]);
+}
 function exCard(id, d, checkable){
   const e = EX[id], done = (d.workoutDone||[]).includes(id);
   const q = encodeURIComponent(e.name.replace(/\(.*\)/,'') + ' exercise form');
   return `<details class="ex"><summary>
       ${checkable ? `<input type="checkbox" class="chk" data-ex="${id}" ${done ? 'checked':''} aria-label="Done: ${esc(e.name)}">` : '<span></span>'}
-      <span><b>${esc(e.name)}</b> ${e.vest ? '<span class="tag">vest</span>' : ''}<br><span class="small muted num">${esc(e.sets)}</span></span>
+      <span><b>${esc(e.name)}</b> ${e.vest ? '<span class="tag">vest</span>' : ''}<br><span class="small muted num">${esc(e.sets)}${exKg(id) != null ? ` · <b>${exKg(id)} kg</b>` : ''}</span></span>
       <span class="small muted">How to ▾</span></summary>
     <div class="body small">
+      ${exKg(id) != null ? `<div class="row"><span>Your weight:</span><button class="btn" data-kg="${id}" data-step="-2.5">−2.5</button><b class="num">${exKg(id)} kg</b><button class="btn" data-kg="${id}" data-step="2.5">+2.5</button>
+        <span class="muted">Hit the top of the rep range on every set with clean form? Go up 2.5 kg next time.</span></div>` : ''}
       <ol>${e.steps.map(s => `<li>${esc(s)}</li>`).join('')}</ol>
       <div><b>Key cue:</b> ${esc(e.cue)}</div>
       <div><b>Common mistakes:</b> ${esc(e.miss)}</div>
@@ -1120,6 +1158,12 @@ document.addEventListener('click', async e => {
   if (b.dataset.ex) { const d = ensureDay(date); d.workoutDone = d.workoutDone || []; const id = b.dataset.ex;
     d.workoutDone = b.checked ? [...new Set([...d.workoutDone, id])] : d.workoutDone.filter(x => x !== id); saveDay(date); return; }
   if (b.dataset.steps) { const d = ensureDay(date); d.extraSteps = Math.max(0, (d.extraSteps||0) + Number(b.dataset.steps)); saveDay(date); return; }
+  if (b.dataset.kg) {
+    const id = b.dataset.kg, next = Math.max(2.5, Math.min(Number(profile.dbKg) || 40, (exKg(id) || 0) + Number(b.dataset.step)));
+    profile.exKg = {...(profile.exKg || {}), [id]: next}; saveProfile();
+    requestAnimationFrame(() => { const el = document.querySelector(`[data-kg="${id}"]`); const det = el && el.closest('details'); if (det) det.open = true; });
+    return;
+  }
   if (b.dataset.water) { const d = ensureDay(date), n = Number(b.dataset.water); d.water = Math.max(0, (d.water||0) + n); if (n > 0) d.waterAt = Date.now(); saveDay(date); return; }
   if (b.dataset.ruck) { const d = ensureDay(date); d.ruckMin = Math.max(0, (d.ruckMin||0) + Number(b.dataset.ruck)); saveDay(date); return; }
   if (b.dataset.delfood != null) { const d = ensureDay(date); d.foods.splice(+b.dataset.delfood, 1); saveDay(date); return; }
@@ -1394,7 +1438,7 @@ function showOnboarding(){
     <div class="small muted" id="oHint">A healthy weight for your height appears here.</div>
     <div class="fields">
       <label class="field"><span class="label">Daily activity (outside workouts)</span><select id="oAct">${Object.entries(ACTIVITY).map(([k,l]) => `<option value="${k}" ${Number(k)===Number(pf.activity)?'selected':''}>${l}</option>`).join('')}</select></label>
-      <label class="field"><span class="label">Dumbbell</span><select id="oDb"><option value="0">None, bodyweight workouts</option>${[5,7.5,10,12.5,15,20,25].map(k => `<option value="${k}" ${hadOnboarded() && Number(pf.dbKg)===k?'selected':''}>${k} kg</option>`).join('')}</select></label>
+      <label class="field"><span class="label">Dumbbell</span><select id="oDb"><option value="0">None, bodyweight workouts</option>${[5,7.5,10,12.5,15,20,25,30,40].map(k => `<option value="${k}" ${hadOnboarded() && Number(pf.dbKg)===k?'selected':''}>${k === 40 ? 'Adjustable up to 40' : k} kg</option>`).join('')}</select></label>
       <label class="field"><span class="label">Weight vest</span><select id="oVest"><option value="0">None, brisk walks</option>${[5,7.5,10,15,20].map(k => `<option value="${k}" ${hadOnboarded() && Number(pf.vestKg)===k?'selected':''}>${k} kg</option>`).join('')}</select></label>
       <label class="field"><span class="label">Coffees per day</span><select id="oCups">${[0,1,2,3,4,5].map(n => `<option value="${n}" ${n===(hadOnboarded() ? coffeeCups() : 2)?'selected':''}>${n}</option>`).join('')}</select></label>
       <label class="field"><span class="label">Your usual coffee</span><select id="oCoffee">${Object.entries(COFFEE).map(([k,c]) => `<option value="${k}" ${k===(hadOnboarded() ? pf.coffeeType : 'black')?'selected':''}>${c.label} (${c.kcal} kcal)</option>`).join('')}</select></label>
